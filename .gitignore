@@ -1,0 +1,26 @@
+# --- Project-specific ---
+Internal_Variables.py
+logs/
+
+# --- Virtual environment ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+build/
+dist/
+.eggs/
+
+# --- Editor / OS ---
+.vscode/
+Thumbs.db
+.DS_Store
+
+# --- Stray TensorBoard event files outside logs/ ---
+*.tfevents.*
