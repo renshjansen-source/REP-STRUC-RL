@@ -19,6 +19,8 @@ class BikeBuilder_Callback(BaseCallback):
         super().__init__(verbose)
 
         # Reward accumulators
+        self.distance_sum = 0.0
+        self.progress_sum = 0.0
         self.step_count   = 0.0
 
         # Penalty accumulators
