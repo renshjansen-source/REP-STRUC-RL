@@ -110,6 +110,7 @@ model_kwargs = dict(
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
+    # ent_coef        = 0.01,
 )
 
 callback_kwargs = dict(
