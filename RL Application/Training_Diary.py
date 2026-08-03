@@ -153,7 +153,7 @@ def load_diary(diary_path: str = "training_diary.jsonl") -> pd.DataFrame:
     # pandas fills in blanks automatically for runs that predate a given field,
     # so nothing here needs to change as the schema grows over time.
     path = Path(__file__).resolve().parent / diary_path
-    return pd.read_json(path, lines=True)
+    return pd.read_json(path, lines=True, dtype={"run_id": str})
 
 # =============================================================================
 # RECORD LOOKUP

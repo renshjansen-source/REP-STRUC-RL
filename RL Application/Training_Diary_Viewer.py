@@ -70,7 +70,7 @@ def _diff(current: dict, previous: dict | None) -> dict:
 # =============================================================================
 
 def build_viewer(diary_path: str = "training_diary.jsonl", output_path: str = "training_diary_viewer.html") -> None:
-    df = load_diary(diary_path).sort_values("started_at").reset_index(drop=True)
+    df = load_diary(diary_path).sort_values("started_at", ascending=True).reset_index(drop=True)
 
     runs = []
     previous_flat: dict | None = None
@@ -93,6 +93,8 @@ def build_viewer(diary_path: str = "training_diary.jsonl", output_path: str = "t
         })
         previous_flat = flat
 
+    runs.reverse()
+
     Path(output_path).write_text(_render_html(runs), encoding="utf-8")
     print(f"Diary viewer written to {output_path} - open it in a browser.")
 
@@ -108,17 +110,17 @@ def _render_html(runs: list) -> str:
 <style>
   body {{ margin: 0; font-family: monospace; display: flex; height: 100vh; }}
   #sidebar {{ width: 260px; overflow-y: auto; border-right: 1px solid #ccc; background: #f7f7f7; }}
-  #sidebar div {{ padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #e0e0e0; font-size: 12px; }}
+  #sidebar div {{ padding: 8px 10px; cursor: pointer; border-bottom: 1px solid #e0e0e0; font-size: 15px; }}
   #sidebar div:hover {{ background: #e8e8e8; }}
   #sidebar div.selected {{ background: #d0e4ff; }}
-  #main {{ flex: 1; overflow-y: auto; padding: 16px; font-size: 13px; }}
+  #main {{ flex: 1; overflow-y: auto; padding: 16px; font-size: 16px; }}
   .added   {{ color: #1a7f37; }}
   .removed {{ color: #cf222e; text-decoration: line-through; }}
   .changed {{ color: #0969da; }}
   .same    {{ color: #24292f; }}
   .field   {{ white-space: pre; }}
   h2 {{ font-size: 15px; margin-bottom: 4px; }}
-  .meta {{ color: #57606a; margin-bottom: 12px; font-size: 12px; }}
+  .meta {{ color: #57606a; margin-bottom: 12px; font-size: 15px; }}
 </style>
 </head>
 <body>
@@ -126,7 +128,7 @@ def _render_html(runs: list) -> str:
 <div id="main"></div>
 <script>
 const runs = {data_json};
-let selectedIndex = runs.length - 1;
+let selectedIndex = 0;
 
 function renderSidebar() {{
   const sidebar = document.getElementById("sidebar");
