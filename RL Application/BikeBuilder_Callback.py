@@ -49,6 +49,8 @@ class BikeBuilder_Callback(BaseCallback):
         self.ep_steps      = np.zeros(n_envs, dtype=np.int64)
         self.ep_intersects = np.zeros(n_envs, dtype=np.int64)
         self.ep_reuses     = np.zeros(n_envs, dtype=np.int64)
+        self.finished_episodes     = 0
+        self.terminated_episodes   = 0
 
         # Tracking lists for per episode collectors
         self.intersect_pcts : list[float] = []
@@ -81,6 +83,11 @@ class BikeBuilder_Callback(BaseCallback):
                 self.ep_intersects[i] = 0
                 self.ep_reuses[i]     = 0
 
+                self.finished_episodes += 1
+                if info.get("terminated", False):
+                    self.terminated_episodes += 1
+                self.logger.record("termination/terminations_per_rollout", self.terminated_episodes)
+
         assert self.grammar is not None
         for action in self.locals["actions"]:
             self.grammar.record(action)
@@ -108,6 +115,13 @@ class BikeBuilder_Callback(BaseCallback):
         self._log_histogram("grammar/candidate_usage", self.grammar.candidate.counts)
         self._log_histogram("grammar/mirror_usage",    self.grammar.mirror.counts)
 
+        # ---  Terminations  ---
+        if self.finished_episodes > 0:
+            self.logger.record(
+                "termination/termination_ep_percentage",
+                100.0 * self.terminated_episodes / self.finished_episodes
+            )
+
         # ---  Reset ---
         self.distance_sum = 0.0
         self.progress_sum = 0.0
@@ -115,3 +129,5 @@ class BikeBuilder_Callback(BaseCallback):
         self.grammar.reset()
         self.intersect_pcts = []
         self.reuse_pcts     = []
+        self.finished_episodes   = 0
+        self.terminated_episodes = 0

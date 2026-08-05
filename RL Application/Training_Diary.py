@@ -108,9 +108,12 @@ class TrainingDiary:
             model_kwargs: dict,
             callback_class  = None,
             callback_kwargs : dict | None = None,
+            note            : str | None = None,
         ) -> None:
  
         note = input("Describe the goal of this run: ")
+        if note is None:
+            note = input("Describe the goal of this run: ")
  
         self._record = {
             "run_id"     : run_id,

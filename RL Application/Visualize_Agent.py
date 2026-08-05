@@ -22,11 +22,11 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260730_211100/best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260803_151410_curriculum/stage3_best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 5
 DETERMINISTIC = True
 SHUFFLE_STOCK = True
-MAX_STEP      = 10
+MAX_STEP      = 20
 
 # =============================================================================
 # DATA LOADING
@@ -63,6 +63,8 @@ env = gym.make(
     render_labels = True,
     render_mode   = "human",
 )
+
+env.metadata["render_fps"] = 45
 
 # =============================================================================
 # MODEL

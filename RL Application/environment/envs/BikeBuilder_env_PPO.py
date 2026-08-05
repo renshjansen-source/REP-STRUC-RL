@@ -25,8 +25,8 @@ class BikeBuilder_Env(gym.Env):
     # ─────────────────────────────────────────────────────────────────────────
     def __init__(
             self,
-            frame_stock  : list[BikeFrame],            # BikeFrame Objects
-            guide_curve  : np.ndarray,      # Pre-sampled in the training file
+            frame_stock  : list[BikeFrame],             # BikeFrame Objects
+            guide_curve  : np.ndarray,                  # Pre-sampled in the training file
             max_step     = 25,
             window_scale = 5,
             render_mode  = None,
@@ -123,6 +123,7 @@ class BikeBuilder_Env(gym.Env):
         self.progress_weight = progress_weight
 
         # Termination initialization
+        self.terminated: bool   = False
         self.enable_termination = enable_termination
         self.strict_termination = strict_termination
 
@@ -169,6 +170,7 @@ class BikeBuilder_Env(gym.Env):
         "reuse_count"  : self.reuse_counter,
         "d_reward"     : self.d_reward,
         "p_reward"     : self.p_reward,
+        "terminated"   : self.terminated,
         }
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -196,6 +198,7 @@ class BikeBuilder_Env(gym.Env):
         self.current_step  = 0
         self.reuse_counter = False
         self.ccx_counter   = False
+        self.terminated    = False
         self.grammar.reset()
 
         # Initializing sub-rewards
@@ -219,6 +222,7 @@ class BikeBuilder_Env(gym.Env):
         # Setting exit conditions
         terminated      = False
         terminal_reward = 0.0
+        self.terminated = False
 
         # Setting reuse and ccx flags
         self.reuse_counter = False
@@ -327,8 +331,9 @@ class BikeBuilder_Env(gym.Env):
             else:
                 self.action_log.append(action_code)             # type: ignore
 
-
-        truncated = self.current_step >= self.max_step
+        self.terminated = terminated
+        truncated       = self.current_step >= self.max_step
+        
         obs = self._get_obs()
         info      = self._get_info()
         return obs, reward, terminated, truncated, info
