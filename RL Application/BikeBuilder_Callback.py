@@ -51,6 +51,7 @@ class BikeBuilder_Callback(BaseCallback):
         self.ep_reuses     = np.zeros(n_envs, dtype=np.int64)
         self.finished_episodes     = 0
         self.terminated_episodes   = 0
+        self.placed_frames_counts: list[int] = []
 
         # Tracking lists for per episode collectors
         self.intersect_pcts : list[float] = []
@@ -79,6 +80,8 @@ class BikeBuilder_Callback(BaseCallback):
             if dones[i]:
                 self.intersect_pcts.append(100.0 * self.ep_intersects[i] / self.ep_steps[i])
                 self.reuse_pcts.append(100.0 * self.ep_reuses[i] / self.ep_steps[i])
+                self.placed_frames_counts.append(info["placed_frames"])
+
                 self.ep_steps[i]      = 0
                 self.ep_intersects[i] = 0
                 self.ep_reuses[i]     = 0
@@ -86,7 +89,6 @@ class BikeBuilder_Callback(BaseCallback):
                 self.finished_episodes += 1
                 if info.get("terminated", False):
                     self.terminated_episodes += 1
-                self.logger.record("termination/terminations_per_rollout", self.terminated_episodes)
 
         assert self.grammar is not None
         for action in self.locals["actions"]:
@@ -121,6 +123,11 @@ class BikeBuilder_Callback(BaseCallback):
                 "termination/termination_ep_percentage",
                 100.0 * self.terminated_episodes / self.finished_episodes
             )
+        self.logger.record("termination/terminations_per_rollout", self.terminated_episodes)
+
+        # --- Behaviour Metrics ---
+        if self.placed_frames_counts:
+            self.logger.record("behaviour/placed_frames_mean", float(np.mean(self.placed_frames_counts)))
 
         # ---  Reset ---
         self.distance_sum = 0.0

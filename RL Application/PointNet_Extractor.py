@@ -72,7 +72,7 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         per_frame_dim = points_per_frame * coords_per_point   # 10 * 2 = 20
 
         frame_embed_dim = 16   # size of each frame's own embedding
-        self.stock_encoder = mlp_branch(per_frame_dim, frame_embed_dim)
+        self.stock_encoder = mlp_branch(per_frame_dim + 1, frame_embed_dim)
 
         local_dim  = n_frames * frame_embed_dim   # every frame's embedding, slot order kept
         global_dim = frame_embed_dim              # same embeddings, pooled - order-invariant
@@ -130,9 +130,12 @@ class PointNet_Extractor(BaseFeaturesExtractor):
 
         # Collapse batch and frame axes together so ONE call to stock_encoder processes
         # every frame, in the whole batch, through the same shared weights at once.
+        # Change: Fused mask and stock observation
         stock_flat_per_frame = observations["stock_geometry"].reshape(batch_size * n_frames, -1)
-        frame_embeddings      = self.stock_encoder(stock_flat_per_frame)
-        frame_embeddings      = frame_embeddings.reshape(batch_size, n_frames, -1)
+        mask_per_frame       = observations["stock_mask"].reshape(batch_size * n_frames, 1)
+        stock_flat_per_frame = th.cat([stock_flat_per_frame, mask_per_frame], dim = 1)
+        frame_embeddings     = self.stock_encoder(stock_flat_per_frame)
+        frame_embeddings     = frame_embeddings.reshape(batch_size, n_frames, -1)
 
         local_feat  = frame_embeddings.reshape(batch_size, -1)   # slot order preserved
         global_feat = frame_embeddings.max(dim=1).values         # order doesn't matter here

@@ -53,7 +53,7 @@ for _, row in bikes_dataframe.iterrows():
 # SEEDING
 # =============================================================================
 
-seed = seed_everything(696307358)   # or seed_everything(123456) to repeat a specific past run
+seed = seed_everything(696307358)   # empty = new seed
 print(f"Using seed: {seed}")
 
 # =============================================================================
@@ -111,7 +111,7 @@ model_kwargs = dict(
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
-    ent_coef        = 0.03,
+    # ent_coef        = 0.03,
 )
 
 callback_kwargs = dict(
@@ -146,7 +146,7 @@ model           = PPO(**model_kwargs)             # type: ignore
 
 print("Starting training...")
 model.learn(
-    total_timesteps = 1_000_000,
+    total_timesteps = 500_000,
     callback        = [eval_callback, custom_callback],
     progress_bar    = True,
 )
