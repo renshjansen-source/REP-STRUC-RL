@@ -33,9 +33,9 @@ class InternalVariables:
     progress_threshold: float = 1500.0
     termination_step  : float = 1.2
     # ---  Penalty Variables  ---
-    reuse_penalty     : float = 0.0
-    ccx_penalty       : float = 0.0
-    overshot_penalty  : float = 0.0
+    reuse_penalty     : float = -2.0
+    ccx_penalty       : float = -2.0
+    overshot_penalty  : float = -2.0
     no_progress       : float = 0.0
     # --- Render  Settings ---
     window_padding    : float = 0.20

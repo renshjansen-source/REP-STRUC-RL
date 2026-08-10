@@ -71,13 +71,7 @@ class BikeBuilder_Env(gym.Env):
                 high  = 1.0,                                    # Changed - Normalized, used to be IV.stock_norm_range               
                 shape = (len(self.frame_stock), 10, 2),
                 dtype = np.float32
-            ),
-            "stock_mask": spaces.Box(
-                low   = 0.0,
-                high  = 1.0,
-                shape = (len(self.frame_stock),),
-                dtype = np.float32
-            ),
+            ),                                                  # Changed - stock mask has been removed
             "current_frame": spaces.Box(                        # Changed - now contains both edge and mid points
                 low   = -np.inf,
                 high  = np.inf,
@@ -154,8 +148,7 @@ class BikeBuilder_Env(gym.Env):
         
         return {
         "guide_curve"    : self.guide_curve_norm,
-        "stock_geometry" : self.stock_geometry_episode,
-        "stock_mask"     : self.stock_mask,
+        "stock_geometry" : self.stock_geometry_episode,                                                 # Changed: Stock mask has been removed
         "current_frame"  : current_frame,
         "progress"       : np.array([self.current_step / self.max_step], dtype=np.float32),
         "max_t"          : np.array([self.max_t], dtype=np.float32),
@@ -278,6 +271,7 @@ class BikeBuilder_Env(gym.Env):
             self.previous_frame = initial_frame
             self.mirror_flag    = mirror
             self.stock_mask[action[0]] = 0.0
+            self.stock_geometry_episode[action[0]] = 0.0            # Changed: Stock is now zeroed, no stock mask
             self.current_step  += 1
             
             truncated = self.current_step >= self.max_step
@@ -297,7 +291,7 @@ class BikeBuilder_Env(gym.Env):
             reward    = IV.ccx_penalty
             truncated = self.current_step >= self.max_step
             if self.render_labels:
-                self.action_log.append(action_code + "-CCX")    # type: ignore
+                self.action_log.append(action_code + "-CCX")     # type: ignore
 
             obs       = self._get_obs()
             info      = self._get_info()
@@ -312,7 +306,8 @@ class BikeBuilder_Env(gym.Env):
         # Book Keeping
         self.previous_frame = placed_frame
         self.mirror_flag    = self.mirror_flag != mirror
-        self.stock_mask[action[0]] = 0.0    
+        self.stock_mask[action[0]] = 0.0   
+        self.stock_geometry_episode[action[0]] = 0.0            # Changed: Stock is now zeroed, no stock mask 
         self.current_step += 1
 
         # Termination Check

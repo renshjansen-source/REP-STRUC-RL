@@ -74,7 +74,7 @@ env_kwargs = dict(
     frame_stock   = frame_stock,
     guide_curve   = sampled_curve,
     max_step      = 10,
-    shuffle_stock = False,
+    shuffle_stock = True,
     enable_termination = False,
     strict_termination = False,
 )

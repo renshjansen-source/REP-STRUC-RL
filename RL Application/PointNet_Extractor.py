@@ -40,7 +40,7 @@ class PointNet_Extractor(BaseFeaturesExtractor):
     Groups the observation Dict into five branches:
       1. guide_curve      - the resampled curve points
       2. stock_geometry   - the full frame stock geometry
-      3. stock_mask       - which frames are still available
+      3. stock_mask       - which frames are still available REMOVED
       4. current          - current_frame
       5. progress         - progress + max_t (combined)
  
@@ -56,8 +56,7 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         # How many numbers each branch boils its observation down to.
         # Larger / more complex observations get more room to work with.
         guide_curve_out    = 32
-        stock_geometry_out = 64
-        stock_mask_out     = 16
+        stock_geometry_out = 64                                                     # Changed: Stock mask removed
         current_out        = 16
         progress_out       = 8
  
@@ -72,7 +71,7 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         per_frame_dim = points_per_frame * coords_per_point   # 10 * 2 = 20
 
         frame_embed_dim = 16   # size of each frame's own embedding
-        self.stock_encoder = mlp_branch(per_frame_dim + 1, frame_embed_dim)
+        self.stock_encoder = mlp_branch(per_frame_dim, frame_embed_dim)             # Changed: Stock mask removed
 
         local_dim  = n_frames * frame_embed_dim   # every frame's embedding, slot order kept
         global_dim = frame_embed_dim              # same embeddings, pooled - order-invariant
@@ -81,16 +80,14 @@ class PointNet_Extractor(BaseFeaturesExtractor):
             nn.Linear(local_dim + global_dim, stock_geometry_out),
             nn.ReLU(),
         )
- 
-        # ---- Branch 3: stock_mask ----
-        stock_mask_dim = flat_dim(observation_space["stock_mask"].shape)
-        self.stock_mask_net = mlp_branch(stock_mask_dim, stock_mask_out)
- 
-        # ---- Branch 4: current_frame  ----
+
+        # Changed: Stock mask removed
+
+        # ---- Branch 3: current_frame  ----
         current_dim = flat_dim(observation_space["current_frame"].shape)
         self.current_net = mlp_branch(current_dim, current_out)
  
-        # ---- Branch 5: progress + max_t (combined) ----
+        # ---- Branch 4: progress + max_t (combined) ----
         progress_dim = (
             flat_dim(observation_space["progress"].shape)
             + flat_dim(observation_space["max_t"].shape)
@@ -103,7 +100,6 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         combined_dim = (
             guide_curve_out
             + stock_geometry_out
-            + stock_mask_out
             + current_out
             + progress_out
         )
@@ -118,7 +114,6 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         # Flatten each observation from its natural shape (e.g. (50, 5, 2))
         # down to a single row per item in the batch (e.g. (batch, 500)).
         guide_curve_flat    = observations["guide_curve"].reshape(batch_size, -1)
-        stock_mask_flat     = observations["stock_mask"].reshape(batch_size, -1) 
         current_flat = observations["current_frame"].reshape(batch_size, -1) 
         progress_flat = th.cat([
             observations["progress"].reshape(batch_size, -1),
@@ -132,8 +127,6 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         # every frame, in the whole batch, through the same shared weights at once.
         # Change: Fused mask and stock observation
         stock_flat_per_frame = observations["stock_geometry"].reshape(batch_size * n_frames, -1)
-        mask_per_frame       = observations["stock_mask"].reshape(batch_size * n_frames, 1)
-        stock_flat_per_frame = th.cat([stock_flat_per_frame, mask_per_frame], dim = 1)
         frame_embeddings     = self.stock_encoder(stock_flat_per_frame)
         frame_embeddings     = frame_embeddings.reshape(batch_size, n_frames, -1)
 
@@ -144,7 +137,6 @@ class PointNet_Extractor(BaseFeaturesExtractor):
  
         # Run each branch on its own slice of the observation.
         guide_curve_feat    = self.guide_curve_net(guide_curve_flat)
-        stock_mask_feat     = self.stock_mask_net(stock_mask_flat)
         current_feat        = self.current_net(current_flat)
         progress_feat       = self.progress_net(progress_flat)
  
@@ -152,7 +144,6 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         combined = th.cat([
             guide_curve_feat,
             stock_geometry_feat,
-            stock_mask_feat,
             current_feat,
             progress_feat,
         ], dim=1)
