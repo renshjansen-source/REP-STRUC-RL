@@ -31,12 +31,12 @@ class InternalVariables:
     # ---  Reward  Variables  ---
     distance_threshold: float = 500.0
     progress_threshold: float = 1500.0
-    no_progress       : float = 0.0
     termination_step  : float = 1.2
     # ---  Penalty Variables  ---
-    reuse_penalty     : float = -1.0
-    ccx_penalty       : float = -1.0
+    reuse_penalty     : float = 0.0
+    ccx_penalty       : float = 0.0
     overshot_penalty  : float = 0.0
+    no_progress       : float = 0.0
     # --- Render  Settings ---
     window_padding    : float = 0.20
     grid_colour       : tuple[int, int, int] = (230, 230, 230)

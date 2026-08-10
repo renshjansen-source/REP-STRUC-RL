@@ -22,11 +22,11 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260807_185904/best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260805_122445/best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 5
 DETERMINISTIC = True
 SHUFFLE_STOCK = True
-MAX_STEP      = 20
+MAX_STEP      = 10
 
 # =============================================================================
 # DATA LOADING

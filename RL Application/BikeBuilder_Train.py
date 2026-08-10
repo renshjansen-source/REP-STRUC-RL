@@ -73,9 +73,9 @@ print(f"Logging to: {log_dir}")
 env_kwargs = dict(
     frame_stock   = frame_stock,
     guide_curve   = sampled_curve,
-    max_step      = 25,
-    shuffle_stock = True,
-    enable_termination = True,
+    max_step      = 10,
+    shuffle_stock = False,
+    enable_termination = False,
     strict_termination = False,
 )
 
@@ -113,7 +113,6 @@ model_kwargs = dict(
     seed            = seed,
     n_steps         = 512, # 2048 / 4 environments
     batch_size      = 64,
-    ent_coef        = 0.03,
 )
 
 callback_kwargs = dict(
@@ -148,7 +147,7 @@ model           = PPO(**model_kwargs)             # type: ignore
 
 print("Starting training...")
 model.learn(
-    total_timesteps = 10_000_000,
+    total_timesteps = 500_000,
     callback        = [eval_callback, custom_callback],
     progress_bar    = True,
 )
