@@ -22,11 +22,12 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260805_122445/best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260811_143633/best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 5
 DETERMINISTIC = True
 SHUFFLE_STOCK = True
 MAX_STEP      = 10
+STOCK_MASK    = True
 
 # =============================================================================
 # DATA LOADING
@@ -56,12 +57,13 @@ for _, row in bikes_dataframe.iterrows():
 # =============================================================================
 env = gym.make(
     "environment/BikeBuilder-v0",
-    frame_stock   = frame_stock,
-    guide_curve   = sampled_curve,
-    max_step      = MAX_STEP,
-    shuffle_stock = SHUFFLE_STOCK,
-    render_labels = True,
-    render_mode   = "human",
+    frame_stock    = frame_stock,
+    guide_curve    = sampled_curve,
+    max_step       = MAX_STEP,
+    use_stock_mask = STOCK_MASK,
+    shuffle_stock  = SHUFFLE_STOCK,
+    render_labels  = True,
+    render_mode    = "human",
 )
 
 env.metadata["render_fps"] = 45

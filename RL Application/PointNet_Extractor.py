@@ -51,12 +51,16 @@ class PointNet_Extractor(BaseFeaturesExtractor):
  
     def __init__(self, observation_space: spaces.Dict, features_dim: int = 256):
         super().__init__(observation_space, features_dim)
+
+        # Recreate the stock mask boolean by checking if stock mask is in the obs space
+        self.use_stock_mask = "stock_mask" in observation_space.spaces
  
         # ---- Branch output sizes ----
         # How many numbers each branch boils its observation down to.
         # Larger / more complex observations get more room to work with.
         guide_curve_out    = 32
-        stock_geometry_out = 64                                                     # Changed: Stock mask removed
+        stock_geometry_out = 64
+        stock_mask_out     = 16                                                    
         current_out        = 16
         progress_out       = 8
  
@@ -71,7 +75,8 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         per_frame_dim = points_per_frame * coords_per_point   # 10 * 2 = 20
 
         frame_embed_dim = 16   # size of each frame's own embedding
-        self.stock_encoder = mlp_branch(per_frame_dim, frame_embed_dim)             # Changed: Stock mask removed
+        stock_encoder_in   = per_frame_dim + 1 if self.use_stock_mask else per_frame_dim  # Changed: Allows for stock mask toggling
+        self.stock_encoder = mlp_branch(stock_encoder_in, frame_embed_dim)                
 
         local_dim  = n_frames * frame_embed_dim   # every frame's embedding, slot order kept
         global_dim = frame_embed_dim              # same embeddings, pooled - order-invariant
@@ -81,7 +86,10 @@ class PointNet_Extractor(BaseFeaturesExtractor):
             nn.ReLU(),
         )
 
-        # Changed: Stock mask removed
+        # ----   Branch 3: stock mask   ----    (toggleable)
+        if self.use_stock_mask:
+            stock_mask_dim = flat_dim(observation_space["stock_mask"].shape)
+            self.stock_mask_net = mlp_branch(stock_mask_dim, stock_mask_out)
 
         # ---- Branch 3: current_frame  ----
         current_dim = flat_dim(observation_space["current_frame"].shape)
@@ -100,6 +108,7 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         combined_dim = (
             guide_curve_out
             + stock_geometry_out
+            + (stock_mask_out if self.use_stock_mask else 0)
             + current_out
             + progress_out
         )
@@ -122,11 +131,12 @@ class PointNet_Extractor(BaseFeaturesExtractor):
 
         # ---- stock_geometry: encode each frame, then build local + global features ----
         n_frames = observations["stock_geometry"].shape[1]
-
-        # Collapse batch and frame axes together so ONE call to stock_encoder processes
-        # every frame, in the whole batch, through the same shared weights at once.
-        # Change: Fused mask and stock observation
         stock_flat_per_frame = observations["stock_geometry"].reshape(batch_size * n_frames, -1)
+
+        if self.use_stock_mask:
+            mask_per_frame = observations["stock_mask"].reshape(batch_size * n_frames, 1)
+            stock_flat_per_frame = th.cat([stock_flat_per_frame, mask_per_frame], dim=1)
+
         frame_embeddings     = self.stock_encoder(stock_flat_per_frame)
         frame_embeddings     = frame_embeddings.reshape(batch_size, n_frames, -1)
 
@@ -141,11 +151,10 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         progress_feat       = self.progress_net(progress_flat)
  
         # Stitch every branch's output together, then combine into one vector.
-        combined = th.cat([
-            guide_curve_feat,
-            stock_geometry_feat,
-            current_feat,
-            progress_feat,
-        ], dim=1)
+        parts = [guide_curve_feat, stock_geometry_feat]
+        if self.use_stock_mask:
+            stock_mask_flat = observations["stock_mask"].reshape(batch_size, -1)
+            parts.append(self.stock_mask_net(stock_mask_flat)) 
+        parts += [current_feat, progress_feat]
  
-        return self.combine_net(combined)
+        return self.combine_net(th.cat(parts, dim=1))

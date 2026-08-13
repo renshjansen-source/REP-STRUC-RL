@@ -44,18 +44,10 @@ for _, row in bikes_dataframe.iterrows():
 
 mock_actions = [
     np.array([0, 1, 0, 1]),
-    np.array([5, 2, 1, 0]),
-    np.array([10, 4, 0, 1]),
-    np.array([15, 3, 4, 0]),
-    np.array([20, 2, 1, 0]),
-    np.array([24, 4, 1, 1]),
-    np.array([23, 4, 1, 1]),
-    np.array([22, 4, 1, 1]),
-    np.array([19, 4, 1, 1]),
-    np.array([18, 4, 4, 0]),
-    np.array([16, 2, 1, 1]),
-    np.array([14, 4, 0, 1]),
-    np.array([4, 3, 3, 1]),
+    np.array([1, 2, 0, 1]),
+    np.array([2, 2, 0, 1]),
+    np.array([3, 2, 0, 1]),
+    np.array([4, 2, 0, 1]),
 ]
 
 # =============================================================================

@@ -189,4 +189,6 @@ class BikeFrame:
         mid     = (point_a + point_b) / 2
         tangent = point_a - point_b
 
-        return Plane(mid, -tangent, mirror_flag)
+        x_vector = tangent if mirror_flag else -tangent
+
+        return Plane(mid, x_vector, mirror=False) # Temporary revised

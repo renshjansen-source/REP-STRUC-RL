@@ -51,11 +51,17 @@ class BikeBuilder_Callback(BaseCallback):
         self.ep_reuses     = np.zeros(n_envs, dtype=np.int64)
         self.finished_episodes     = 0
         self.terminated_episodes   = 0
-        self.placed_frames_counts: list[int] = []
+        self.placed_frames_counts: list[int]   = []
+        self.max_t_values        : list[float] = []
 
         # Tracking lists for per episode collectors
         self.intersect_pcts : list[float] = []
         self.reuse_pcts     : list[float] = []
+
+        # Cross Training Tallies
+        self.termination_tally = 0
+        self.truncation_tally  = 0
+        self.episode_tally     = 0
 
     def _log_histogram(self, tag: str, counts: np.ndarray) -> None:
         if self._tb_writer is None or counts.sum() == 0:
@@ -81,14 +87,20 @@ class BikeBuilder_Callback(BaseCallback):
                 self.intersect_pcts.append(100.0 * self.ep_intersects[i] / self.ep_steps[i])
                 self.reuse_pcts.append(100.0 * self.ep_reuses[i] / self.ep_steps[i])
                 self.placed_frames_counts.append(info["placed_frames"])
+                self.max_t_values.append(float(info["max_t"]))
 
                 self.ep_steps[i]      = 0
                 self.ep_intersects[i] = 0
                 self.ep_reuses[i]     = 0
 
                 self.finished_episodes += 1
+                self.episode_tally += 1
+
                 if info.get("terminated", False):
                     self.terminated_episodes += 1
+                    self.termination_tally   += 1
+                else:
+                    self.truncation_tally    += 1
 
         assert self.grammar is not None
         for action in self.locals["actions"]:
@@ -124,10 +136,15 @@ class BikeBuilder_Callback(BaseCallback):
                 100.0 * self.terminated_episodes / self.finished_episodes
             )
         self.logger.record("termination/terminations_per_rollout", self.terminated_episodes)
+        self.logger.record("termination/termination_tally", self.termination_tally)
+        self.logger.record("termination/truncation_tally",  self.truncation_tally)
+        self.logger.record("termination/episode_tally",     self.episode_tally) 
 
         # --- Behaviour Metrics ---
         if self.placed_frames_counts:
             self.logger.record("behaviour/placed_frames_mean", float(np.mean(self.placed_frames_counts)))
+        if self.max_t_values:                                                          
+            self.logger.record("behaviour/max_t_mean", float(np.mean(self.max_t_values)))
 
         # ---  Reset ---
         self.distance_sum = 0.0
@@ -136,5 +153,7 @@ class BikeBuilder_Callback(BaseCallback):
         self.grammar.reset()
         self.intersect_pcts = []
         self.reuse_pcts     = []
+        self.placed_frames_counts = []
+        self.max_t_values         = []
         self.finished_episodes   = 0
         self.terminated_episodes = 0

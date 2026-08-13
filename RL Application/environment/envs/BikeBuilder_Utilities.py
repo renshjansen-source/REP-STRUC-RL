@@ -79,6 +79,14 @@ def rotation_matrix(angle: float):
                 [sin_a,  cos_a]])
     return R
 
+def reflection_matrix(vector: Vector2D) -> np.ndarray:
+    # Reflection about the axis perpendicular to `vector` (vector must be unit length)
+    nx, ny = -vector[1], vector[0]
+    return np.array([
+        [nx**2 - ny**2, 2*nx*ny],
+        [2*nx*ny,       ny**2 - nx**2],
+    ], dtype=np.float32)
+
 def plane_transform(candidate_plane: Plane, target_plane: Plane) -> np.ndarray:
     candidate = np.column_stack([candidate_plane.X_vector, candidate_plane.Y_vector])
     target    = np.column_stack([target_plane.X_vector,   target_plane.Y_vector])

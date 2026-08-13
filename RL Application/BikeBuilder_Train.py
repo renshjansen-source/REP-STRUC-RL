@@ -10,6 +10,7 @@ from datetime import datetime
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util  import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.vec_env   import SubprocVecEnv
 
 import environment
 from internal_variables import IV
@@ -53,7 +54,7 @@ for _, row in bikes_dataframe.iterrows():
 # SEEDING
 # =============================================================================
 
-seed = seed_everything(696307358)   # empty = new seed
+seed = seed_everything()   # empty = new seed. Current testing seed = 696307358
 print(f"Using seed: {seed}")
 
 # =============================================================================
@@ -75,6 +76,7 @@ env_kwargs = dict(
     guide_curve   = sampled_curve,
     max_step      = 10,
     shuffle_stock = True,
+    use_stock_mask     = True,
     enable_termination = False,
     strict_termination = False,
 )
@@ -98,6 +100,8 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
+total_timesteps = 500_000
+
 policy_kwargs = dict(
     features_extractor_class  = PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
@@ -136,6 +140,9 @@ diary.start(
     model_kwargs    = model_kwargs,
     callback_class  = EvalCallback,
     callback_kwargs = callback_kwargs,
+    train_n_envs    = train_env.num_envs,
+    eval_n_envs     = eval_env.num_envs,
+    total_timesteps = total_timesteps,
 )
 
 # =============================================================================
@@ -147,7 +154,7 @@ model           = PPO(**model_kwargs)             # type: ignore
 
 print("Starting training...")
 model.learn(
-    total_timesteps = 500_000,
+    total_timesteps = total_timesteps,
     callback        = [eval_callback, custom_callback],
     progress_bar    = True,
 )
