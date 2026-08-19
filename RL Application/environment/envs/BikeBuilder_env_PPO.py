@@ -223,16 +223,6 @@ class BikeBuilder_Env(gym.Env):
         "p_reward"     : self.p_reward,
         "terminated"   : self.terminated,
         }
-    # ─────────────────────────────────────────────────────────────────────────
-    # ACTION MASKING FUNCTION
-    # ─────────────────────────────────────────────────────────────────────────
-    def action_masks(self) -> np.ndarray:
-        return np.concatenate([
-            self.stock_mask.astype(bool),
-            np.ones(len(PointDict), dtype=bool),
-            np.ones(len(PointDict), dtype=bool),
-            np.ones(2, dtype=bool),
-        ])
     
     # ─────────────────────────────────────────────────────────────────────────
     # RESET FUNCTION
