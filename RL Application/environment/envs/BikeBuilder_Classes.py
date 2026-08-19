@@ -148,6 +148,14 @@ class BikeFrame:
         center_point = np.mean(self.points, axis=0)
         return center_point
 
+    @property
+    def turning_angles(self) -> np.ndarray:
+        edges  = np.roll(self.points, -1, axis=0) - self.points
+        e_prev = np.roll(edges, 1, axis=0)
+        cross_vals = e_prev[:, 0] * edges[:, 1] - e_prev[:, 1] * edges[:, 0]
+        dot_vals   = e_prev[:, 0] * edges[:, 0] + e_prev[:, 1] * edges[:, 1]
+        return np.arctan2(cross_vals, dot_vals).astype(np.float32)
+
     def mid_pt(self, index: PointDict):
         # For retrieving only a single mid point
         idx_a, idx_b = Pairs[index.value]

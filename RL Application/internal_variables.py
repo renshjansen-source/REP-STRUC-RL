@@ -25,18 +25,19 @@ class InternalVariables:
     frames_v0         : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_25.csv"
     crs_v0            : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_25_crs.csv"
     # --- Tolerance Variables ---
-    intersect_tol     : float = 1e-3
-    intersect_buffer  : int   = 3
+    intersect_tol        : float = 1e-3
+    intersect_buffer     : int   = 3
     termination_vicinity : float = 300.0
+    angle_rounding       : int   = 3
     # ---  Reward  Variables  ---
     distance_threshold: float = 500.0
     progress_threshold: float = 1500.0
     termination_step  : float = 1.2
     # ---  Penalty Variables  ---
-    reuse_penalty     : float = 0.0
-    ccx_penalty       : float = 0.0
+    reuse_penalty     : float = -0.5
+    ccx_penalty       : float = -0.5
     overshot_penalty  : float = 0.0
-    no_progress       : float = 0.0
+    no_progress       : float = -1.0
     # --- Render  Settings ---
     window_padding    : float = 0.20
     grid_colour       : tuple[int, int, int] = (230, 230, 230)

@@ -46,7 +46,6 @@ def resample_curve(curve: np.ndarray, samples: int) -> np.ndarray:
 
     return sampled_points
 
-# WIP - want to make it so that it just takes the full csv and outputs the normalized areas
 def normalized_cross_sections(outer_diameter, thickness):
     inner_diameter = outer_diameter - 2.0 * thickness
     cross_section  = (math.pi / 4.0) * (outer_diameter**2 - inner_diameter**2)
@@ -191,6 +190,39 @@ def place(
     moved_frame = BikeFrame(moved_points, recenter = False)
 
     return moved_frame
+# =============================================================================
+# FUNCTIONS - OBSERVATIONS
+# =============================================================================
+
+def encode_angles(angles: np.ndarray) -> np.ndarray:
+    pairs = np.stack([np.cos(angles), np.sin(angles)], axis=-1).astype(np.float32)
+    return np.round(pairs, decimals=IV.angle_rounding).astype(np.float32)
+
+def build_observation_points(frame: BikeFrame, obs_type: str, norm_range) -> np.ndarray:
+    if obs_type == "combined":
+        return (frame.observation_points / norm_range).astype(np.float32)
+    if obs_type == "edge":
+        return (frame.points / norm_range).astype(np.float32)
+    if obs_type == "mid":
+        return (frame.mid_points / norm_range).astype(np.float32)
+    if obs_type == "angle":
+        normalized_points = frame.points / norm_range
+        angle_encoded     = encode_angles(frame.turning_angles)
+        n = len(frame.points)
+        return np.stack([normalized_points, angle_encoded], axis=1).reshape(n * 2, 2).astype(np.float32)
+    raise ValueError(f"Unknown obs_type {obs_type!r} - expected one of 'combined', 'edge', 'mid', 'angle'")
+
+def build_current_frame_observation(placed_frames, obs_type, norm_range, points_per_frame, buffer_size=None):
+    if buffer_size is None:
+        if not placed_frames:
+            return np.zeros((points_per_frame, 2), dtype=np.float32)
+        return build_observation_points(placed_frames[-1], obs_type, norm_range)
+
+    recent_frames = list(reversed(placed_frames[-buffer_size:]))  # most-recent-first
+    stacked = np.zeros((buffer_size, points_per_frame, 2), dtype=np.float32)
+    for i, frame in enumerate(recent_frames):
+        stacked[i] = build_observation_points(frame, obs_type, norm_range)
+    return stacked
 
 # =============================================================================
 # FUNCTIONS - PENALTIES

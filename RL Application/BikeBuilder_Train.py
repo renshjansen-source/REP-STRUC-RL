@@ -16,7 +16,7 @@ import environment
 from internal_variables import IV
 from BikeBuilder_Seeder import seed_everything
 from environment.envs.BikeBuilder_env_PPO   import BikeBuilder_Env
-from environment.envs.BikeBuilder_Utilities import resample_curve
+from environment.envs.BikeBuilder_Utilities import resample_curve, normalized_cross_sections
 from environment.envs.BikeBuilder_Classes   import BikeFrame
 from BikeBuilder_Extractor import BikeBuilder_Extractor
 from PointNet_Extractor    import PointNet_Extractor
@@ -27,7 +27,6 @@ from Training_Diary import TrainingDiary
 # =============================================================================
 # DATA IMPORTS
 # =============================================================================
-
 # LOADING CURVE
 curve_dataframe = pd.read_csv(IV.arch_v0)
 guide_curve     = curve_dataframe[["x_cord", "z_cord"]].to_numpy(dtype=np.float32)
@@ -37,7 +36,7 @@ guide_curve     = (guide_curve + shift).astype(np.float32)
 
 sampled_curve   = resample_curve(guide_curve, IV.curve_samples)
 
-# Loading Bikes
+# Loading Bikes - Frames
 bikes_dataframe              = pd.read_csv(IV.frames_v0)
 frame_stock: list[BikeFrame] = []
 for _, row in bikes_dataframe.iterrows():
@@ -50,17 +49,34 @@ for _, row in bikes_dataframe.iterrows():
     ], dtype=np.float32)
     frame_stock.append(BikeFrame(points))
 
+# Loading Bikes - Cross Sectional Areas
+crs_dataframe = pd.read_csv(IV.crs_v0)
+crs_dataframe = crs_dataframe * 1000.0
+
+# Doubling CS and SS areas
+crs_dataframe['CS_OD'] = (2 * crs_dataframe['CS_OD']) - crs_dataframe['CS_T']
+crs_dataframe['SS_OD'] = (2 * crs_dataframe['SS_OD']) - crs_dataframe['SS_T']
+
+tube_order = ['ST', 'TT', 'HT', 'DT', 'CS', 'SS']
+raw_areas = np.array([
+    [normalized_cross_sections(float(crs_dataframe.iloc[i][f'{tube}_OD']), float(crs_dataframe.iloc[i][f'{tube}_T']))
+     for tube in tube_order]
+    for i in range(len(crs_dataframe))
+], dtype=np.float32)
+
+area_maxes = raw_areas.max(axis=0) # Migrate this to normalized_cross_sections
+area_maxes[area_maxes == 0] = 1.0
+stock_areas = (raw_areas / area_maxes).astype(np.float32)
+
 # =============================================================================
 # SEEDING
 # =============================================================================
-
-seed = seed_everything()   # empty = new seed. Current testing seed = 696307358
+seed = seed_everything(696307358)   # empty = new seed. Current testing seed = 696307358
 print(f"Using seed: {seed}")
 
 # =============================================================================
 # LOGGING SETUP
 # =============================================================================
-
 diary = TrainingDiary()
 
 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -72,18 +88,22 @@ print(f"Logging to: {log_dir}")
 # ENVIRONMENT SETUP
 # =============================================================================
 env_kwargs = dict(
+    obs_type      = 'mid',         # 'combined' | 'edge' | 'mid' | 'angle'
     frame_stock   = frame_stock,
     guide_curve   = sampled_curve,
-    max_step      = 10,
+    stock_areas   = stock_areas,
+    max_step      = 25,
     shuffle_stock = True,
-    use_stock_mask     = True,
-    enable_termination = False,
-    strict_termination = False,
+    current_frame_sweep = True,
+    use_stock_mask      = False,    # Current default hypothesis
+    use_stock_areas     = False,
+    enable_termination  = True,
+    strict_termination  = False,
 )
 
 train_env = make_vec_env(
     "environment/BikeBuilder-v0",
-    n_envs      = 4,
+    n_envs      = 16,
     env_kwargs  = env_kwargs,
     monitor_dir = f"{log_dir}/train",
     seed        = seed,
@@ -91,7 +111,7 @@ train_env = make_vec_env(
 
 eval_env = make_vec_env(
     "environment/BikeBuilder-v0",
-    n_envs      = 4,
+    n_envs      = 16,
     env_kwargs  = env_kwargs,
     monitor_dir = f"{log_dir}/eval",
     seed        = seed,
@@ -100,7 +120,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps = 500_000
+total_timesteps = 1_000_000
 
 policy_kwargs = dict(
     features_extractor_class  = PointNet_Extractor,
@@ -115,15 +135,15 @@ model_kwargs = dict(
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
-    n_steps         = 512, # 2048 / 4 environments
-    batch_size      = 64,
+    n_steps         = 256, # 2048 / 4 environments
+    batch_size      = 128,
 )
 
 callback_kwargs = dict(
     eval_env              = eval_env,
     best_model_save_path  = f"{log_dir}/best_model",
     log_path              = f"{log_dir}/eval_logs",
-    eval_freq             = 2500,
+    eval_freq             = 256,
     n_eval_episodes       = 8,
     deterministic         = True,
     render                = False,
@@ -140,9 +160,11 @@ diary.start(
     model_kwargs    = model_kwargs,
     callback_class  = EvalCallback,
     callback_kwargs = callback_kwargs,
-    train_n_envs    = train_env.num_envs,
-    eval_n_envs     = eval_env.num_envs,
-    total_timesteps = total_timesteps,
+    extra           = dict(
+        train_n_envs    = train_env.num_envs,
+        eval_n_envs     = eval_env.num_envs,
+        total_timesteps = total_timesteps,
+    ),
 )
 
 # =============================================================================

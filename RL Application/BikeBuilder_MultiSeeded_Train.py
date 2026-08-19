@@ -25,8 +25,11 @@ from Training_Diary import TrainingDiary
 # SWEEP DEFINITION
 # =============================================================================
 CONFIGS = [
+    {"seed": 696551358,  "note": "Seeding sweep with seed 696551358"},
     {"seed": 994987960,  "note": "Seeding sweep with seed 994987960"},
     {"seed": 982521492,  "note": "Seeding sweep with seed 982521492"},
+    {"seed": 187368865,  "note": "Seeding sweep with seed 187368865"},
+    {"seed": 124840844,  "note": "Seeding sweep with seed 124840844"},
 ]
 
 # =============================================================================
@@ -70,10 +73,14 @@ policy_kwargs = dict(
 )
 
 env_kwargs = dict(
-    frame_stock   = frame_stock,
-    guide_curve   = sampled_curve,
-    max_step      = 10,
-    shuffle_stock = True,
+    obs_type       = 'angle',
+    current_frame_sweep = True,
+    frame_stock    = frame_stock,
+    guide_curve    = sampled_curve,
+    max_step       = 25,
+    shuffle_stock  = True,
+    use_stock_mask = False,
+    enable_termination = True,
 )
 
 # =============================================================================
@@ -115,14 +122,14 @@ for i, cfg in enumerate(CONFIGS, start=1):
         # ---------------------------------------------------------------------
         # KEYWORD ARGUMENTS
         # ---------------------------------------------------------------------   
-        total_timesteps = 500_000
+        total_timesteps = 1_000_000
 
         model_kwargs = dict(
             policy          = "MultiInputPolicy",
             env             = train_env,
             policy_kwargs   = policy_kwargs,
             n_steps         = 256,
-            batch_size      = 64,
+            batch_size      = 128,
             verbose         = 1,
             tensorboard_log = sweep_log_dir,
             device          = "auto",
@@ -130,9 +137,9 @@ for i, cfg in enumerate(CONFIGS, start=1):
         )
 
         callback_kwargs = dict(
-            eval_env              = eval_env,
-            best_model_save_path  = f"{sweep_log_dir}/{run_name}_best_model",
-            log_path              = f"{sweep_log_dir}/{run_name}_eval_logs",
+            eval_env               = eval_env,
+            best_model_save_path   = f"{sweep_log_dir}/{run_name}_best_model",
+            log_path               = f"{sweep_log_dir}/{run_name}_eval_logs",
             eval_freq              = 256,         # One per rollout
             n_eval_episodes        = 8,
             deterministic          = True,
@@ -150,9 +157,11 @@ for i, cfg in enumerate(CONFIGS, start=1):
             callback_class  = EvalCallback,
             callback_kwargs = callback_kwargs,
             note            = cfg["note"],
-            train_n_envs    = train_env.num_envs,
-            eval_n_envs     = eval_env.num_envs,
-            total_timesteps = total_timesteps,
+            extra           = dict(
+                train_n_envs    = train_env.num_envs,
+                eval_n_envs     = eval_env.num_envs,
+                total_timesteps = total_timesteps,
+            ),
         )
 
         # ---------------------------------------------------------------------

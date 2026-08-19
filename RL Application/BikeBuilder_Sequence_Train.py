@@ -25,14 +25,15 @@ from Training_Diary import TrainingDiary
 # SWEEP DEFINITION
 # =============================================================================
 CONFIGS = [
-    {"n_steps": 128, "batch_size": 64,  "note": "HP sweep: n_steps=128, batch_size=64, n_envs=16"},
-    {"n_steps": 256, "batch_size": 64,  "note": "HP sweep: n_steps=256, batch_size=64, n_envs=16"},
-    {"n_steps": 256, "batch_size": 128, "note": "HP sweep: n_steps=256, batch_size=128, n_envs=16"},
-    {"n_steps": 512, "batch_size": 64,  "note": "HP sweep: n_steps=512, batch_size=64, n_envs=16"},
-    {"n_steps": 512, "batch_size": 128, "note": "HP sweep: n_steps=512, batch_size=128, n_envs=16"},
-    {"n_steps": 512, "batch_size": 256, "note": "HP sweep: n_steps=512, batch_size=256, n_envs=16"},
+    {"obs_type": "combined", "current_frame_sweep": True},
+    {"obs_type": "combined", "current_frame_sweep": False},
+    {"obs_type": "edge",     "current_frame_sweep": True},
+    {"obs_type": "edge",     "current_frame_sweep": False},
+    {"obs_type": "mid",      "current_frame_sweep": True},
+    {"obs_type": "mid",      "current_frame_sweep": False},
+    {"obs_type": "angle",    "current_frame_sweep": True},
+    {"obs_type": "angle",    "current_frame_sweep": False},
 ]
-
 # =============================================================================
 # DATA IMPORTS
 # =============================================================================
@@ -66,7 +67,7 @@ print(f"Using seed: {seed}")
 # =============================================================================
 diary          = TrainingDiary()
 sweep_stamp    = datetime.now().strftime("%Y%m%d_%H%M%S")
-sweep_log_dir  = f"logs/{sweep_stamp}_hp_sweep"
+sweep_log_dir  = f"logs/{sweep_stamp}_obs_sweep"
 os.makedirs(sweep_log_dir, exist_ok=True)
 failures_path  = f"{sweep_log_dir}/failures.txt"
 print(f"Sweep logging to: {sweep_log_dir}")
@@ -79,11 +80,12 @@ policy_kwargs = dict(
     features_extractor_kwargs = dict(features_dim=256),
 )
 
-env_kwargs = dict(
+base_env_kwargs = dict(
     frame_stock   = frame_stock,
     guide_curve   = sampled_curve,
-    max_step      = 10,
+    max_step      = 25,
     shuffle_stock = True,
+    enable_termination = True,
 )
 
 # =============================================================================
@@ -91,14 +93,22 @@ env_kwargs = dict(
 # =============================================================================
 for i, cfg in enumerate(CONFIGS, start=1):
 
-    run_stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name  = f"{cfg['n_steps']}_{cfg['batch_size']}_{run_stamp}"
+    sweep_label = "sweep" if cfg["current_frame_sweep"] else "nosweep"
+    run_stamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    run_name    = f"{cfg['obs_type']}_{sweep_label}_{run_stamp}"
+    note        = f"Obs sweep: obs_type={cfg['obs_type']}, current_frame_sweep={cfg['current_frame_sweep']}"
     print(f"\n=== Run {i}/{len(CONFIGS)} — {run_name} ===")
 
     # -------------------------------------------------------------------------
     # ENVIRONMENT SETUP
     # -------------------------------------------------------------------------
-    try:
+    try:        
+        env_kwargs = dict(
+            base_env_kwargs,
+            obs_type            = cfg["obs_type"],
+            current_frame_sweep = cfg["current_frame_sweep"],
+        )
+
         train_env = make_vec_env(
             "environment/BikeBuilder-v0",
             n_envs      = 16,
@@ -118,14 +128,14 @@ for i, cfg in enumerate(CONFIGS, start=1):
         # ---------------------------------------------------------------------
         # KEYWORD ARGUMENTS
         # ---------------------------------------------------------------------   
-        total_timesteps = 500_000
+        total_timesteps = 1_000_000
 
         model_kwargs = dict(
             policy          = "MultiInputPolicy",
             env             = train_env,
             policy_kwargs   = policy_kwargs,
-            n_steps         = cfg["n_steps"],
-            batch_size      = cfg["batch_size"],
+            n_steps         = 256,
+            batch_size      = 128,
             verbose         = 1,
             tensorboard_log = sweep_log_dir,
             device          = "auto",
@@ -136,11 +146,12 @@ for i, cfg in enumerate(CONFIGS, start=1):
             eval_env              = eval_env,
             best_model_save_path  = f"{sweep_log_dir}/{run_name}_best_model",
             log_path              = f"{sweep_log_dir}/{run_name}_eval_logs",
-            eval_freq              = cfg["n_steps"],         # One per rollout
+            eval_freq              = 256,         # One per rollout
             n_eval_episodes        = 8,
             deterministic          = True,
             render                 = False,
         )
+
         # ---------------------------------------------------------------------
         # DIARY SETUP
         # ---------------------------------------------------------------------
@@ -152,10 +163,12 @@ for i, cfg in enumerate(CONFIGS, start=1):
             model_kwargs    = model_kwargs,
             callback_class  = EvalCallback,
             callback_kwargs = callback_kwargs,
-            note            = cfg["note"],
-            train_n_envs    = train_env.num_envs,
-            eval_n_envs     = eval_env.num_envs,
-            total_timesteps = total_timesteps,
+            note            = note,
+            extra           = dict(
+                train_n_envs    = train_env.num_envs,
+                eval_n_envs     = eval_env.num_envs,
+                total_timesteps = total_timesteps,
+            ),
         )
 
         # ---------------------------------------------------------------------

@@ -106,12 +106,10 @@ class TrainingDiary:
             env_kwargs  : dict,
             model_class,
             model_kwargs: dict,
-            total_timesteps : int,
             callback_class  = None,
             callback_kwargs : dict | None = None,
             note            : str  | None = None,
-            train_n_envs    : int  | None = None,
-            eval_n_envs     : int  | None = None,
+            extra           : dict | None = None,
         ) -> None:
  
         if note is None:
@@ -121,7 +119,6 @@ class TrainingDiary:
             "run_id"          : run_id,
             "note"            : note,
             "started_at"      : datetime.now().isoformat(timespec="seconds"),
-            "total_timesteps" : total_timesteps,
  
             "internal_variables": capture_iv(),
  
@@ -132,10 +129,8 @@ class TrainingDiary:
             "model_kwargs": {k: sanitize(v) for k, v in resolve_kwargs(model_class, model_kwargs).items()},
         }
 
-        if train_n_envs is not None:
-            self._record["train_n_envs"]    = train_n_envs
-        if eval_n_envs is not None:
-            self._record["eval_n_envs"]     = eval_n_envs
+        if extra is not None:
+            self._record["extra"] = {k: sanitize(v) for k, v in extra.items()}
 
         if callback_class is not None:
             self._record["callback_class"]  = callback_class.__name__

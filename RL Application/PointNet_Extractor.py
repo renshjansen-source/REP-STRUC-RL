@@ -53,30 +53,34 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         super().__init__(observation_space, features_dim)
 
         # Recreate the stock mask boolean by checking if stock mask is in the obs space
-        self.use_stock_mask = "stock_mask" in observation_space.spaces
+        self.use_stock_mask  = "stock_mask"  in observation_space.spaces
+        self.use_stock_areas = "stock_areas" in observation_space.spaces
  
         # ---- Branch output sizes ----
         # How many numbers each branch boils its observation down to.
         # Larger / more complex observations get more room to work with.
         guide_curve_out    = 32
         stock_geometry_out = 64
-        stock_mask_out     = 16                                                    
+        stock_areas_out    = 24
+        stock_mask_out     = 16                                              
         current_out        = 16
         progress_out       = 8
  
         # ---- Branch 1: guide_curve ----
-        guide_curve_dim = flat_dim(observation_space["guide_curve"].shape)
+        guide_curve_dim      = flat_dim(observation_space["guide_curve"].shape)
         self.guide_curve_net = mlp_branch(guide_curve_dim, guide_curve_out)
  
         # ---- Branch 2: stock_geometry (PointNet-style) ----
         stock_shape = observation_space["stock_geometry"].shape
         assert stock_shape is not None
         n_frames, points_per_frame, coords_per_point = stock_shape
-        per_frame_dim = points_per_frame * coords_per_point   # 10 * 2 = 20
+        per_frame_dim = points_per_frame * coords_per_point
 
-        frame_embed_dim = 16   # size of each frame's own embedding
-        stock_encoder_in   = per_frame_dim + 1 if self.use_stock_mask else per_frame_dim  # Changed: Allows for stock mask toggling
-        self.stock_encoder = mlp_branch(stock_encoder_in, frame_embed_dim)                
+        n_area_features    = observation_space["stock_areas"].shape[-1] if self.use_stock_areas else 0 # type: ignore
+
+        frame_embed_dim    = 16   # size of each frame's own embedding
+        stock_encoder_in   = per_frame_dim + (1 if self.use_stock_mask else 0) + n_area_features  # Changed: Allows for stock mask / area toggling
+        self.stock_encoder = mlp_branch(stock_encoder_in, frame_embed_dim)              
 
         local_dim  = n_frames * frame_embed_dim   # every frame's embedding, slot order kept
         global_dim = frame_embed_dim              # same embeddings, pooled - order-invariant
@@ -88,19 +92,24 @@ class PointNet_Extractor(BaseFeaturesExtractor):
 
         # ----   Branch 3: stock mask   ----    (toggleable)
         if self.use_stock_mask:
-            stock_mask_dim = flat_dim(observation_space["stock_mask"].shape)
+            stock_mask_dim      = flat_dim(observation_space["stock_mask"].shape)
             self.stock_mask_net = mlp_branch(stock_mask_dim, stock_mask_out)
 
-        # ---- Branch 3: current_frame  ----
-        current_dim = flat_dim(observation_space["current_frame"].shape)
+        # ---- Branch 4: current_frame  ----
+        current_dim      = flat_dim(observation_space["current_frame"].shape)
         self.current_net = mlp_branch(current_dim, current_out)
  
-        # ---- Branch 4: progress + max_t (combined) ----
+        # ---- Branch 5: progress + max_t (combined) ----
         progress_dim = (
             flat_dim(observation_space["progress"].shape)
             + flat_dim(observation_space["max_t"].shape)
         )
         self.progress_net = mlp_branch(progress_dim, progress_out)
+
+        # --- Branch 6: stock areas ----
+        if self.use_stock_areas:
+            stock_areas_dim      = flat_dim(observation_space["stock_areas"].shape)
+            self.stock_areas_net = mlp_branch(stock_areas_dim, stock_areas_out) 
  
         # ---- Combining layer ----
         # Takes every branch's output, stitched together, and projects it down
@@ -108,7 +117,8 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         combined_dim = (
             guide_curve_out
             + stock_geometry_out
-            + (stock_mask_out if self.use_stock_mask else 0)
+            + (stock_mask_out  if self.use_stock_mask  else 0)
+            + (stock_areas_out if self.use_stock_areas else 0)
             + current_out
             + progress_out
         )
@@ -137,6 +147,10 @@ class PointNet_Extractor(BaseFeaturesExtractor):
             mask_per_frame = observations["stock_mask"].reshape(batch_size * n_frames, 1)
             stock_flat_per_frame = th.cat([stock_flat_per_frame, mask_per_frame], dim=1)
 
+        if self.use_stock_areas:
+            area_per_frame = observations["stock_areas"].reshape(batch_size * n_frames, -1)
+            stock_flat_per_frame = th.cat([stock_flat_per_frame, area_per_frame], dim=1) 
+
         frame_embeddings     = self.stock_encoder(stock_flat_per_frame)
         frame_embeddings     = frame_embeddings.reshape(batch_size, n_frames, -1)
 
@@ -155,6 +169,11 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         if self.use_stock_mask:
             stock_mask_flat = observations["stock_mask"].reshape(batch_size, -1)
             parts.append(self.stock_mask_net(stock_mask_flat)) 
+
+        if self.use_stock_areas:
+            stock_areas_flat = observations["stock_areas"].reshape(batch_size, -1)
+            parts.append(self.stock_areas_net(stock_areas_flat))
+
         parts += [current_feat, progress_feat]
  
         return self.combine_net(th.cat(parts, dim=1))

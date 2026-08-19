@@ -11,7 +11,7 @@ import pandas as pd
 from gymnasium import spaces
 
 from internal_variables import IV
-from environment.envs.BikeBuilder_Utilities import coordinate_to_pixel, initial_targets, place_first, place, frames_intersect, step_reward, check_termination
+from environment.envs.BikeBuilder_Utilities import coordinate_to_pixel, initial_targets, place_first, place, frames_intersect, step_reward, check_termination, build_observation_points, build_current_frame_observation
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar
 
 # =============================================================================
@@ -25,17 +25,21 @@ class BikeBuilder_Env(gym.Env):
     # ─────────────────────────────────────────────────────────────────────────
     def __init__(
             self,
+            obs_type,                                   # 'combined' | 'edge' | 'mid' | 'angle'
             frame_stock  : list[BikeFrame],             # BikeFrame Objects
             guide_curve  : np.ndarray,                  # Pre-sampled in the training file
+            stock_areas  = None,
             max_step     = 25,
             window_scale = 5,
             render_mode  = None,
             distance_weight = 1.0,
             progress_weight = 1.0,
-            shuffle_stock   = True,                     # Added: Now stock can be shuffled
-            use_stock_mask  = False,                    # Added: Allows for switching between stock zeroing and stock masking for reuse
-            render_labels   = False,                    # Added: Allows for more extensive rendering
-            render_centroids= False,
+            current_frame_sweep = False,
+            shuffle_stock       = True,                     # Added: Now stock can be shuffled
+            use_stock_mask      = False,                    # Added: Allows for switching between stock zeroing and stock masking for reuse
+            use_stock_areas     = False,                    # Added: Optional stock area injector
+            render_labels       = False,                    # Added: Allows for more extensive rendering
+            render_centroids    = False,
             enable_termination : bool = False,          # Added: Enables termination logics
             strict_termination : bool = False,          # Added: If true, termination only yields rewards if the frame has not exceeded the curve
     ):
@@ -44,7 +48,23 @@ class BikeBuilder_Env(gym.Env):
         self.frame_stock = frame_stock
 
         # Observation Variables
-        self.use_stock_mask = use_stock_mask
+        self.use_stock_mask      = use_stock_mask
+        self.use_stock_areas     = use_stock_areas
+        self.stock_areas         = stock_areas              # Stock areas are pre-normalized in training script
+        self.obs_type            = obs_type
+        self.max_step            = max_step
+        self.current_frame_sweep = current_frame_sweep
+        self.buffer_size         = IV.intersect_buffer if self.current_frame_sweep else None
+
+        # Determine obs shapes
+        self.points_per_frame = build_observation_points(
+            self.frame_stock[0], self.obs_type, IV.stock_norm_range
+        ).shape[0]
+
+        self.current_frame_shape = (
+            (IV.intersect_buffer, self.points_per_frame, 2) if self.current_frame_sweep
+            else (self.points_per_frame, 2)
+        )
 
         # Bounding Area Variables
         x_min, x_max = IV.x_bounds
@@ -73,13 +93,13 @@ class BikeBuilder_Env(gym.Env):
             "stock_geometry": spaces.Box(
                 low   = -1.0,                                   # Changed - Used to be 0.0 but the BB normalization can cause negative values
                 high  = 1.0,                                    # Changed - Normalized, used to be IV.stock_norm_range               
-                shape = (len(self.frame_stock), 10, 2),
+                shape = (len(self.frame_stock), self.points_per_frame, 2),
                 dtype = np.float32
             ),                                                  # Changed - stock mask has been removed
             "current_frame": spaces.Box(                        # Changed - now contains both edge and mid points
                 low   = -np.inf,
                 high  = np.inf,
-                shape = (10, 2),
+                shape = self.current_frame_shape,               # Changed - allows for sweeping observation
                 dtype = np.float32
             ),
             "progress": spaces.Box(
@@ -96,27 +116,32 @@ class BikeBuilder_Env(gym.Env):
             ),
         }
 
+        # Toggleable Observations
         if self.use_stock_mask:
             obs_dict["stock_mask"] = spaces.Box(
                 low=0.0, high=1.0, shape=(len(self.frame_stock),), dtype=np.float32
             )  
 
-        self.observation_space = spaces.Dict(obs_dict)
+        if self.use_stock_areas:
+            obs_dict["stock_areas"] = spaces.Box(
+                low=0.0, high=1.0, shape=(len(self.frame_stock), 6), dtype=np.float32
+            )
 
-        # Observation Variables
-        self.max_step       = max_step
-        self.stock_geometry = np.array([frame.observation_points for frame in self.frame_stock], dtype=np.float32)
+        self.observation_space = spaces.Dict(obs_dict)
 
         # Normalization Variables
         self._norm_xy            = np.array([x_max, z_max], dtype=np.float32)
         self.guide_curve_norm    = (self.guide_curve / self._norm_xy).astype(np.float32)
-        self.stock_geometry_norm = (self.stock_geometry / IV.stock_norm_range).astype(np.float32)
+        self.stock_geometry_norm = np.array([
+            build_observation_points(frame, self.obs_type, IV.stock_norm_range)
+            for frame in self.frame_stock
+        ], dtype=np.float32)
 
         # Randomization Variables
         self.shuffle_stock  = shuffle_stock
 
         # Tracking Variables
-        self.grammar = EpisodeGrammar(
+        self.grammar  = EpisodeGrammar(
             stock     = ShapeGrammar(size=len(self.frame_stock)),
             target    = ShapeGrammar(size=len(PointDict), labels=[p.name for p in PointDict]),
             candidate = ShapeGrammar(size=len(PointDict), labels=[p.name for p in PointDict]),
@@ -153,10 +178,9 @@ class BikeBuilder_Env(gym.Env):
     # ─────────────────────────────────────────────────────────────────────────
     def _get_obs(self):
 
-        if self.previous_frame is not None:
-            current_frame = (self.previous_frame.observation_points / self._norm_xy).astype(np.float32) # Changed - Normalized, used to be self.previous_frame.observation_points 
-        else:
-            current_frame = np.zeros((10, 2), dtype=np.float32)
+        current_frame = build_current_frame_observation(
+            self.placed_frames, self.obs_type, self._norm_xy, self.points_per_frame, self.buffer_size
+        )
 
         obs = {
         "guide_curve"    : self.guide_curve_norm,
@@ -165,8 +189,11 @@ class BikeBuilder_Env(gym.Env):
         "progress"       : np.array([self.current_step / self.max_step], dtype=np.float32),
         "max_t"          : np.array([self.max_t], dtype=np.float32),
         }
+        
         if self.use_stock_mask:
             obs["stock_mask"] = self.stock_mask
+        if self.use_stock_areas:
+            obs["stock_areas"] = self.stock_areas_episode
         
         return obs
 
@@ -201,7 +228,10 @@ class BikeBuilder_Env(gym.Env):
         else:
             self.perm = np.arange(len(self.frame_stock))
 
-        self.stock_geometry_episode = self.stock_geometry_norm[self.perm]
+        self.stock_geometry_episode  = self.stock_geometry_norm[self.perm]
+
+        if self.use_stock_areas:
+            self.stock_areas_episode = self.stock_areas[self.perm]              # type: ignore
 
         # Initializing counters
         self.current_step  = 0
@@ -288,7 +318,9 @@ class BikeBuilder_Env(gym.Env):
             self.mirror_flag    = mirror
             self.stock_mask[action[0]] = 0.0
             if not self.use_stock_mask:
-                self.stock_geometry_episode[action[0]] = 0.0            # Changed: Stock is now zeroed, no stock mask
+                self.stock_geometry_episode[action[0]]  = 0.0       # Changed: Stock is now zeroed, no stock mask
+                if self.use_stock_areas:
+                    self.stock_areas_episode[action[0]] = 0.0
             self.current_step  += 1
             
             truncated = self.current_step >= self.max_step
@@ -325,7 +357,9 @@ class BikeBuilder_Env(gym.Env):
         self.mirror_flag    = mirror 
         self.stock_mask[action[0]] = 0.0   
         if not self.use_stock_mask:
-            self.stock_geometry_episode[action[0]] = 0.0
+            self.stock_geometry_episode[action[0]]  = 0.0
+            if self.use_stock_areas:
+                self.stock_areas_episode[action[0]] = 0.0
         self.current_step += 1
 
         # Termination Check
