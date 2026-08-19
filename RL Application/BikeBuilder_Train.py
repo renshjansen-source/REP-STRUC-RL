@@ -93,12 +93,15 @@ env_kwargs = dict(
     guide_curve   = sampled_curve,
     stock_areas   = stock_areas,
     max_step      = 25,
-    shuffle_stock = True,
+    progress_weight = 1.0,
+    distance_weight = 1.0,
+    shuffle_stock       = True,
     current_frame_sweep = True,
     use_stock_mask      = False,    # Current default hypothesis
     use_stock_areas     = False,
     enable_termination  = True,
     strict_termination  = False,
+    normalization_type  = 'bounding', # 'curve' or 'bounding'
 )
 
 train_env = make_vec_env(

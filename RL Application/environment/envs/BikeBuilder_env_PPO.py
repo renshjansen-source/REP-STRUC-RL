@@ -34,6 +34,7 @@ class BikeBuilder_Env(gym.Env):
             render_mode  = None,
             distance_weight = 1.0,
             progress_weight = 1.0,
+            normalization_type  = 'curve',              # 'curve' or 'bounding'
             current_frame_sweep = False,
             shuffle_stock       = True,                     # Added: Now stock can be shuffled
             use_stock_mask      = False,                    # Added: Allows for switching between stock zeroing and stock masking for reuse
@@ -55,6 +56,7 @@ class BikeBuilder_Env(gym.Env):
         self.max_step            = max_step
         self.current_frame_sweep = current_frame_sweep
         self.buffer_size         = IV.intersect_buffer if self.current_frame_sweep else None
+        self.normalization_type  = normalization_type
 
         # Determine obs shapes
         self.points_per_frame = build_observation_points(
@@ -78,6 +80,19 @@ class BikeBuilder_Env(gym.Env):
             "z_max": z_max,
         }
         self.bounding_range = [x_max - x_min, z_max - z_min]
+
+        # Normalization Check
+        if self.normalization_type   == 'bounding':
+            self._norm_xy = np.array([x_max, z_max], dtype=np.float32)
+        elif self.normalization_type == 'curve':
+            self._norm_xy = np.array([
+            self.guide_curve[:, 0].max(),
+            self.guide_curve[:, 1].max(),
+            ], dtype=np.float32)
+        else:
+            raise ValueError(
+                f"Unknown normalization_type {self.normalization_type!r} — expected 'bounding' or 'curve'"
+            )
 
         # Action Space
         self.action_space = spaces.MultiDiscrete([len(self.frame_stock), 5, 5, 2])
@@ -129,13 +144,13 @@ class BikeBuilder_Env(gym.Env):
 
         self.observation_space = spaces.Dict(obs_dict)
 
-        # Normalization Variables
-        self._norm_xy            = np.array([x_max, z_max], dtype=np.float32)
+        # Normalization
         self.guide_curve_norm    = (self.guide_curve / self._norm_xy).astype(np.float32)
         self.stock_geometry_norm = np.array([
             build_observation_points(frame, self.obs_type, IV.stock_norm_range)
             for frame in self.frame_stock
         ], dtype=np.float32)
+
 
         # Randomization Variables
         self.shuffle_stock  = shuffle_stock
@@ -208,7 +223,17 @@ class BikeBuilder_Env(gym.Env):
         "p_reward"     : self.p_reward,
         "terminated"   : self.terminated,
         }
-
+    # ─────────────────────────────────────────────────────────────────────────
+    # ACTION MASKING FUNCTION
+    # ─────────────────────────────────────────────────────────────────────────
+    def action_masks(self) -> np.ndarray:
+        return np.concatenate([
+            self.stock_mask.astype(bool),
+            np.ones(len(PointDict), dtype=bool),
+            np.ones(len(PointDict), dtype=bool),
+            np.ones(2, dtype=bool),
+        ])
+    
     # ─────────────────────────────────────────────────────────────────────────
     # RESET FUNCTION
     # ─────────────────────────────────────────────────────────────────────────

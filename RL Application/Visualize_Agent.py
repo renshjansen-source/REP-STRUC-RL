@@ -72,6 +72,7 @@ env = gym.make(
     strict_termination = STRICT_TERM,
     render_labels   = True,
     render_mode     = "human",
+    normalization_type = 'curve',
 )
 
 env.metadata["render_fps"] = 45

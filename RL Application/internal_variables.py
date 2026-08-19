@@ -10,7 +10,7 @@ repo_root = Path(__file__).resolve().parent.parent # REP_STRUC RL/
 @dataclass(frozen=True)
 class InternalVariables:
     # --- Placement Logics ---
-    connection_offset : float = 50.0
+    connection_offset : float = 80.0
     start_rotation    : float = 0.25 * math.pi
     # ---  Data  Handling  ---
     curve_samples     : int   = 100
@@ -30,14 +30,15 @@ class InternalVariables:
     termination_vicinity : float = 300.0
     angle_rounding       : int   = 3
     # ---  Reward  Variables  ---
-    distance_threshold: float = 500.0
-    progress_threshold: float = 1500.0
-    termination_step  : float = 1.2
+    distance_threshold : float = 500.0
+    progress_threshold : float = 1500.0
+    termination_step   : float = 1.2
+    progress_multiplier: float = 1.0
     # ---  Penalty Variables  ---
     reuse_penalty     : float = -0.5
     ccx_penalty       : float = -0.5
     overshot_penalty  : float = 0.0
-    no_progress       : float = -1.0
+    no_progress       : float = 0.0
     # --- Render  Settings ---
     window_padding    : float = 0.20
     grid_colour       : tuple[int, int, int] = (230, 230, 230)

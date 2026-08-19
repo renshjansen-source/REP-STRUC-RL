@@ -269,12 +269,13 @@ def progression_reward(
     t_current = np.float32(nearest_idx / IV.curve_samples)
 
     if t_current > max_t:
+        progress_scale = (1.0 + t_current) * IV.progress_multiplier
         previous_curve_point_idx = int(max_t * IV.curve_samples)
         previous_curve_point     = guide_curve[previous_curve_point_idx]
         current_curve_point      = guide_curve[nearest_idx]
 
         progress = np.linalg.norm(current_curve_point - previous_curve_point)
-        reward   = progress_weight * (progress / IV.progress_threshold)
+        reward   = progress_weight * (progress / IV.progress_threshold) * progress_scale
         max_t    = t_current
     else: 
         reward   = IV.no_progress
@@ -308,7 +309,7 @@ def check_termination(
         curve_end          : np.ndarray,
         curve_end_tangent  : np.ndarray,
         current_step       : int,
-        max_step            : int,
+        max_step           : int,
         strict_termination : bool,
     ) -> tuple[bool, float]:
 
