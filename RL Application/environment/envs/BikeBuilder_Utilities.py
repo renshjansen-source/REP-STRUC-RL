@@ -52,6 +52,7 @@ def normalized_cross_sections(outer_diameter, thickness):
     
     return cross_section
 
+
 # =============================================================================
 # FUNCTIONS - OPERATIONAL LOGICS
 # =============================================================================
@@ -223,6 +224,35 @@ def build_current_frame_observation(placed_frames, obs_type, norm_range, points_
     for i, frame in enumerate(recent_frames):
         stacked[i] = build_observation_points(frame, obs_type, norm_range)
     return stacked
+
+def build_observation_points_positive(frame_stock: list, obs_type: str) -> np.ndarray:
+    # Determines a shared [x_min,x_max] x [z_min,z_max] box from the ENTIRE input
+    # stock, then remaps every frame's points into that box, independently per
+    # axis, into [0,1]. No norm_range is passed in -- it's derived here.
+    if obs_type == "combined":
+        pts_fn = lambda f: f.observation_points
+    elif obs_type in ("edge", "angle"):
+        pts_fn = lambda f: f.points
+    elif obs_type == "mid":
+        pts_fn = lambda f: f.mid_points
+    else:
+        raise ValueError(f"Unknown obs_type {obs_type!r} - expected one of 'combined', 'edge', 'mid', 'angle'")
+
+    raw_stock   = np.stack([pts_fn(frame) for frame in frame_stock])   # (n_frames, n_points, 2)
+    stock_min   = raw_stock.min(axis=(0, 1))                           # [x_min, z_min], whole stock
+    stock_max   = raw_stock.max(axis=(0, 1))                           # [x_max, z_max], whole stock
+    stock_range = stock_max - stock_min                                # independent per-axis span
+
+    normalized_stock = []
+    for frame in frame_stock:
+        pts = (pts_fn(frame) - stock_min) / stock_range                # -> [0,1] per axis, independently
+        if obs_type == "angle":
+            angle_encoded = encode_angles(frame.turning_angles)        # never touched by this remap
+            n = len(pts)
+            pts = np.stack([pts, angle_encoded], axis=1).reshape(n * 2, 2)
+        normalized_stock.append(pts.astype(np.float32))
+
+    return np.array(normalized_stock, dtype=np.float32)
 
 # =============================================================================
 # FUNCTIONS - PENALTIES

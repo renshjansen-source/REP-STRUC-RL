@@ -17,11 +17,11 @@ class InternalVariables:
     curve_norm_range  : int   = 8200
     stock_norm_range  : int   = 630 # Changed from 630 for stock of 25 to 700 for stock of 35 or 50
     # ---  Bounding Space  ---
-    origin_position   : tuple[float, float] = (1000,2000)
-    x_bounds          : tuple[float, float] = (0, 9000)
-    z_bounds          : tuple[float, float] = (0, 4500)
+    origin_position   : tuple[float, float] = (500,500)
+    x_bounds          : tuple[float, float] = (0, 8000)
+    z_bounds          : tuple[float, float] = (0, 2000)
     # ---  File Locations  ---
-    arch_v0           : Path = repo_root / "Datasets" / "Curves" / "final_arch_short_v0.csv"
+    arch_v0           : Path = repo_root / "Datasets" / "Curves" / "final_arch_short_true_0_v0.csv"
     frames_v0         : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_25.csv"
     crs_v0            : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_25_crs.csv"
     # --- Tolerance Variables ---

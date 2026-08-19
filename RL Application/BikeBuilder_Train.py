@@ -88,20 +88,21 @@ print(f"Logging to: {log_dir}")
 # ENVIRONMENT SETUP
 # =============================================================================
 env_kwargs = dict(
-    obs_type      = 'mid',         # 'combined' | 'edge' | 'mid' | 'angle'
-    frame_stock   = frame_stock,
-    guide_curve   = sampled_curve,
-    stock_areas   = stock_areas,
-    max_step      = 25,
+    obs_type        = 'mid',       # 'combined' | 'edge' | 'mid' | 'angle'
+    stock_mask_mode = 'zero_geo',  # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
+    frame_stock     = frame_stock,
+    guide_curve     = sampled_curve,
+    stock_areas     = stock_areas,
+    max_step        = 25,
     progress_weight = 1.0,
     distance_weight = 1.0,
-    shuffle_stock       = True,
-    current_frame_sweep = True,
-    use_stock_mask      = False,    # Current default hypothesis
-    use_stock_areas     = False,
-    enable_termination  = True,
-    strict_termination  = False,
-    normalization_type  = 'bounding', # 'curve' or 'bounding'
+    use_positive_stock_norm = True,
+    shuffle_stock           = True,
+    current_frame_sweep     = True,
+    use_stock_areas         = False,
+    enable_termination      = True,
+    strict_termination      = False,
+    normalization_type      = 'bounding', # 'curve' or 'bounding'
 )
 
 train_env = make_vec_env(
