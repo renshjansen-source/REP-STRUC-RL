@@ -22,15 +22,9 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260818_203849/best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260820_175731/best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 5
 DETERMINISTIC = True
-SHUFFLE_STOCK = True
-MAX_STEP      = 25
-STOCK_MASK    = False
-USE_AREA      = False
-TERMINATION   = True
-STRICT_TERM   = False
 
 # =============================================================================
 # DATA LOADING
@@ -61,18 +55,21 @@ for _, row in bikes_dataframe.iterrows():
 env = gym.make(
     "environment/BikeBuilder-v0",
     obs_type        = 'mid',
-    current_frame_sweep = True,
-    frame_stock     = frame_stock,
-    guide_curve     = sampled_curve,
-    max_step        = MAX_STEP,
-    use_stock_mask  = STOCK_MASK,
-    use_stock_areas = USE_AREA,
-    shuffle_stock   = SHUFFLE_STOCK,
-    enable_termination = TERMINATION,
-    strict_termination = STRICT_TERM,
-    render_labels   = True,
-    render_mode     = "human",
-    normalization_type = 'curve',
+    stock_mask_mode = 'binary',
+    frame_stock        = frame_stock,
+    guide_curve        = sampled_curve,
+    max_step           = 25,
+    progress_weight    = 1.0,
+    distance_weight    = 1.0,
+    use_positive_stock_norm = True,
+    shuffle_stock           = True,
+    current_frame_sweep     = True,
+    use_stock_areas         = False,
+    enable_termination      = True,
+    strict_termination      = False,
+    normalization_type  = 'bounding',
+    render_mode         = 'human',
+    render_labels       = True,
 )
 
 env.metadata["render_fps"] = 45

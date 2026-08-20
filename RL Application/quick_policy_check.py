@@ -90,7 +90,7 @@ print(f"Logging to: {log_dir}")
 # =============================================================================
 env_kwargs = dict(
     obs_type        = 'mid',       # 'combined' | 'edge' | 'mid' | 'angle'
-    stock_mask_mode = 'binary',  # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
+    stock_mask_mode = 'binary',    # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
     frame_stock     = frame_stock,
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
@@ -122,11 +122,17 @@ eval_env = make_vec_env(
     seed        = seed,
 )
 
+# +++ TEMP — remove before the real run
+obs = train_env.reset()
+print(obs["stock_mask"].shape, obs["stock_mask"].dtype, obs["stock_mask"][0])
+raise SystemExit
+# +++ END TEMP
+
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
 total_timesteps       = 1_000_000
-enable_action_masking = True
+enable_action_masking = False
 
 policy_kwargs = dict(
     features_extractor_class  = PointNet_Extractor,

@@ -271,6 +271,18 @@ def segments_intersect(p1, p2, p3, p4) -> bool:
 
     return 0.0 < t < 1.0 and 0.0 < u < 1.0
 
+def nearest_frames(frame: BikeFrame, candidates: list[BikeFrame], n: int) -> list[BikeFrame]:
+    if len(candidates) <= n:
+        return candidates
+
+    distances = [distance_to(frame.Centroid, other.Centroid) for other in candidates]
+    order = np.argsort(distances)[:n]
+    return [candidates[i] for i in order]
+
+def frames_intersect_proximity(frame: BikeFrame, candidates: list[BikeFrame], n: int) -> bool:
+    nearby = nearest_frames(frame, candidates, n)
+    return frames_intersect(frame, nearby)
+
 def frames_intersect(frame: BikeFrame, buffer_frames: list[BikeFrame]) -> bool:
     for other_frame in buffer_frames:
         for a1, a2 in Pairs.values():

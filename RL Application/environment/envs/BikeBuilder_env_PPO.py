@@ -21,7 +21,8 @@ from environment.envs.BikeBuilder_Utilities import (
     check_termination, 
     build_observation_points, 
     build_current_frame_observation,
-    build_observation_points_positive
+    build_observation_points_positive,
+    frames_intersect_proximity
     )
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar
 
@@ -255,7 +256,7 @@ class BikeBuilder_Env(gym.Env):
         "terminated"   : self.terminated,
         }
     # ─────────────────────────────────────────────────────────────────────────
-    # ACTION MASKING FUNCTION
+    # ACTION MASKING FUNCTION (outdated - i think)
     # ─────────────────────────────────────────────────────────────────────────
     def action_masks(self) -> np.ndarray:
         return np.concatenate([
@@ -389,8 +390,9 @@ class BikeBuilder_Env(gym.Env):
         placed_frame = place(frame, self.previous_frame, candidate, target, mirror, self.mirror_flag)        
 
         # Intersection Check
-        buffer_frames = self.placed_frames[-IV.intersect_buffer:] # Only last few frames
-        if frames_intersect(placed_frame, buffer_frames):
+        # buffer_frames = self.placed_frames[-IV.intersect_buffer:] # Only last few frames
+        # if frames_intersect(placed_frame, buffer_frames):
+        if frames_intersect_proximity(placed_frame, self.placed_frames, IV.intersect_buffer):
             self.current_step += 1
             self.ccx_counter   = True
             reward    = IV.ccx_penalty

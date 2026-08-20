@@ -36,7 +36,7 @@ class InternalVariables:
     progress_multiplier: float = 1.0
     # ---  Penalty Variables  ---
     reuse_penalty     : float = -0.5
-    ccx_penalty       : float = -0.5
+    ccx_penalty       : float = -2.0
     overshot_penalty  : float = 0.0
     no_progress       : float = 0.0
     # --- Render  Settings ---
