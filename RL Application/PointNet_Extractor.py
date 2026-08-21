@@ -96,8 +96,23 @@ class PointNet_Extractor(BaseFeaturesExtractor):
             self.stock_mask_net = mlp_branch(stock_mask_dim, stock_mask_out)
 
         # ---- Branch 4: current_frame  ----
-        current_dim      = flat_dim(observation_space["current_frame"].shape)
-        self.current_net = mlp_branch(current_dim, current_out)
+        current_shape = observation_space["current_frame"].shape
+        self.current_frame_is_sweep = len(current_shape) == 3           # type: ignore
+
+        if self.current_frame_is_sweep:
+            buffer_size, cf_points_per_frame, cf_coords = current_shape # type: ignore
+            current_frame_embed_dim    = 16
+            self.current_frame_encoder = mlp_branch(cf_points_per_frame * cf_coords, current_frame_embed_dim)
+
+            cf_local_dim  = buffer_size * current_frame_embed_dim
+            cf_global_dim = current_frame_embed_dim
+            self.current_net = nn.Sequential(
+                nn.Linear(cf_local_dim + cf_global_dim, current_out),
+                nn.ReLU(),
+            )
+        else:
+            current_dim      = flat_dim(current_shape)
+            self.current_net = mlp_branch(current_dim, current_out)
  
         # ---- Branch 5: progress + max_t (combined) ----
         progress_dim = (
@@ -133,7 +148,6 @@ class PointNet_Extractor(BaseFeaturesExtractor):
         # Flatten each observation from its natural shape (e.g. (50, 5, 2))
         # down to a single row per item in the batch (e.g. (batch, 500)).
         guide_curve_flat    = observations["guide_curve"].reshape(batch_size, -1)
-        current_flat = observations["current_frame"].reshape(batch_size, -1) 
         progress_flat = th.cat([
             observations["progress"].reshape(batch_size, -1),
             observations["max_t"].reshape(batch_size, -1),
@@ -161,7 +175,18 @@ class PointNet_Extractor(BaseFeaturesExtractor):
  
         # Run each branch on its own slice of the observation.
         guide_curve_feat    = self.guide_curve_net(guide_curve_flat)
-        current_feat        = self.current_net(current_flat)
+        if self.current_frame_is_sweep:
+            buffer_size = observations["current_frame"].shape[1]
+            current_flat_per_frame = observations["current_frame"].reshape(batch_size * buffer_size, -1)
+            current_frame_embeddings = self.current_frame_encoder(current_flat_per_frame)
+            current_frame_embeddings = current_frame_embeddings.reshape(batch_size, buffer_size, -1)
+
+            current_local  = current_frame_embeddings.reshape(batch_size, -1)
+            current_global = current_frame_embeddings.max(dim=1).values
+            current_feat   = self.current_net(th.cat([current_local, current_global], dim=1))
+        else:
+            current_flat = observations["current_frame"].reshape(batch_size, -1)
+            current_feat = self.current_net(current_flat)
         progress_feat       = self.progress_net(progress_flat)
  
         # Stitch every branch's output together, then combine into one vector.

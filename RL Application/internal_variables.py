@@ -32,15 +32,16 @@ class InternalVariables:
     # ---  Reward  Variables  ---
     distance_threshold : float = 500.0
     progress_threshold : float = 1500.0
-    termination_step   : float = 1.2
-    progress_multiplier: float = 1.0
+    termination_step   : float = 3.0
+    progress_multiplier: float = 1.2
+    progress_exponent  : float = 1.0
     # ---  Penalty Variables  ---
     reuse_penalty     : float = -0.5
     ccx_penalty       : float = -2.0
     overshot_penalty  : float = 0.0
     no_progress       : float = 0.0
     # --- Render  Settings ---
-    window_padding    : float = 0.20
+    window_padding    : float = 0.1
     grid_colour       : tuple[int, int, int] = (230, 230, 230)
     label_colour      : tuple[int, int, int] = (150, 150, 150)
     g_curve_colour    : tuple[int, int, int] = (200, 200, 200)
@@ -52,11 +53,18 @@ class InternalVariables:
     side_panel_width  : int = 220
     side_panel_colour : tuple[int, int, int] = (245, 245, 245)
     side_panel_text_colour : tuple[int, int, int] = (0, 0, 0)
-    side_panel_font_size   : int = 16
-    side_panel_line_height : int = 18
+    side_panel_font_size   : int = 14
+    side_panel_line_height : int = 14
     label_font_size   : int = 16
     centroid_colour: tuple[int, int, int] = (255, 0, 0)
     centroid_radius: int = 4
+    # --- Extractor Layers ---
+    guide_curve_out    = 32
+    stock_geometry_out = 64
+    stock_areas_out    = 24
+    stock_mask_out     = 16
+    current_out        = 16
+    progress_out       = 8
     
 
 IV  = InternalVariables()

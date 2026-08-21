@@ -353,7 +353,7 @@ def check_termination(
         current_step       : int,
         max_step           : int,
         strict_termination : bool,
-    ) -> tuple[bool, float]:
+    ) -> tuple[bool, float, bool]:
 
     steps_remaining = max_step - current_step
     centroid        = frame.Centroid
@@ -363,16 +363,16 @@ def check_termination(
 
     if strict_termination:
         if overshot:
-            return True, IV.overshot_penalty
+            return True, IV.overshot_penalty, overshot
         if within_vicinity:
-            return True, steps_remaining * IV.termination_step
+            return True, IV.termination_step, overshot
     else:
         if within_vicinity:
-            return True, steps_remaining * IV.termination_step
+            return True, IV.termination_step, overshot
         if overshot:
-            return True, IV.overshot_penalty
+            return True, IV.overshot_penalty, overshot
 
-    return False, 0.0
+    return False, 0.0, overshot
 
 # =============================================================================
 # FUNCTIONS - RENDERING

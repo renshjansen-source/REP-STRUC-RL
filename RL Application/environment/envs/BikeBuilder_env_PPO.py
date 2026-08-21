@@ -67,7 +67,7 @@ class BikeBuilder_Env(gym.Env):
         self.obs_type                = obs_type
         self.max_step                = max_step
         self.current_frame_sweep     = current_frame_sweep
-        self.buffer_size             = IV.intersect_buffer if self.current_frame_sweep else None
+        self.buffer_size             = self.max_step if self.current_frame_sweep else None
         self.normalization_type      = normalization_type
         self.use_positive_stock_norm = use_positive_stock_norm
 
@@ -87,7 +87,7 @@ class BikeBuilder_Env(gym.Env):
         ).shape[0]
 
         self.current_frame_shape = (
-            (IV.intersect_buffer, self.points_per_frame, 2) if self.current_frame_sweep
+            (self.buffer_size, self.points_per_frame, 2) if self.current_frame_sweep
             else (self.points_per_frame, 2)
         )
         if self.obs_type == "angle":
@@ -201,6 +201,7 @@ class BikeBuilder_Env(gym.Env):
 
         # Termination initialization
         self.terminated: bool   = False
+        self.overshot: bool     = False
         self.enable_termination = enable_termination
         self.strict_termination = strict_termination
 
@@ -254,6 +255,7 @@ class BikeBuilder_Env(gym.Env):
         "d_reward"     : self.d_reward,
         "p_reward"     : self.p_reward,
         "terminated"   : self.terminated,
+        "overshot"     : self.overshot,
         }
     # ─────────────────────────────────────────────────────────────────────────
     # ACTION MASKING FUNCTION (outdated - i think)
@@ -295,6 +297,7 @@ class BikeBuilder_Env(gym.Env):
         self.reuse_counter = False
         self.ccx_counter   = False
         self.terminated    = False
+        self.overshot      = False
         self.grammar.reset()
 
         # Initializing sub-rewards
@@ -319,6 +322,7 @@ class BikeBuilder_Env(gym.Env):
         terminated      = False
         terminal_reward = 0.0
         self.terminated = False
+        self.overshot   = False
 
         # Setting reuse and ccx flags
         self.reuse_counter = False
@@ -422,11 +426,12 @@ class BikeBuilder_Env(gym.Env):
 
         # Termination Check
         if self.enable_termination:
-            terminated, terminal_reward = check_termination(
+            terminated, terminal_reward, overshot = check_termination(
                 placed_frame, self.curve_end, self.curve_end_tangent,
                 self.current_step, self.max_step, self.strict_termination
             )
-            reward += terminal_reward
+            reward        += terminal_reward
+            self.overshot  = overshot
 
         self.placed_frames.append(placed_frame)
         if self.render_labels:

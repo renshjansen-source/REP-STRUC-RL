@@ -20,6 +20,7 @@ from environment.envs.BikeBuilder_Utilities import resample_curve, normalized_cr
 from environment.envs.BikeBuilder_Classes   import BikeFrame
 from BikeBuilder_Extractor import BikeBuilder_Extractor
 from PointNet_Extractor    import PointNet_Extractor
+from BikeBuilder_Custom_Extractor import Custom_PointNet_Extractor
 from BikeBuilder_Callback  import BikeBuilder_Callback
 from BikeBuilder_Custom_Policy import MaskablePolicy
 
@@ -129,7 +130,7 @@ total_timesteps       = 1_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
-    features_extractor_class  = PointNet_Extractor,
+    features_extractor_class  = Custom_PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
 )

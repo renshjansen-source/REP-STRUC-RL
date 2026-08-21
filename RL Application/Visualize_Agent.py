@@ -22,7 +22,7 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260820_175731/best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260821_133113/best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 5
 DETERMINISTIC = True
 
