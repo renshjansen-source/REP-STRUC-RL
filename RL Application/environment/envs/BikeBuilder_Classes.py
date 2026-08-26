@@ -11,6 +11,7 @@ from internal_variables import IV
 from dataclasses import dataclass, field
 from functools import cached_property
 from collections import defaultdict # Allows for reading of keys which don't exist yet
+from typing import Optional # Required for GH-level access to functions, replaces type | None = None type assertions. (GH python is older)
 
 # =============================================================================
 # TYPE ALIASES
@@ -60,7 +61,7 @@ def segments_intersect(p1, p2, p3, p4) -> bool:
 @dataclass
 class ShapeGrammar:
     size   : int
-    labels : list[str] | None = None
+    labels : Optional[list[str]] = None
     counts : np.ndarray = field(init = False)
 
     def __post_init__(self):
