@@ -10,6 +10,7 @@ from enum import Enum
 from internal_variables import IV
 from dataclasses import dataclass, field
 from functools import cached_property
+from collections import defaultdict # Allows for reading of keys which don't exist yet
 
 # =============================================================================
 # TYPE ALIASES
@@ -21,7 +22,6 @@ Point2D  = NDArray[np.float32]
 # =============================================================================
 # PLAIN DICTIONARIES
 # =============================================================================
-
 Pairs = {
     0: (0, 1),   # TT_MID : ST_TOP  → HT_TOP
     1: (1, 2),   # HT_MID : HT_TOP  → HT_BOTTOM
@@ -30,6 +30,29 @@ Pairs = {
     4: (4, 0),   # SS_MID : CS_SS   → ST_TOP
 }
 
+OUTER_TUBE_PROPERTIES = ("top_tubes", "head_tubes", "down_tubes", "chain_stays", "seat_stays")
+
+# =============================================================================
+# ASSISTING FUNCTIONS
+# =============================================================================
+def cross(vector_a: Vector2D, vector_b: Vector2D) -> float:
+    return vector_a[0] * vector_b[1] - vector_a[1] * vector_b[0]
+
+def dot(vector_a: Vector2D, vector_b: Vector2D) -> float:
+    return vector_a[0] * vector_b[0] + vector_a[1] * vector_b[1]
+
+def segments_intersect(p1, p2, p3, p4) -> bool:
+    d1 = p2 - p1
+    d2 = p4 - p3
+    cross_product = cross(d1, d2)
+
+    if abs(cross_product) < IV.intersect_tol:
+        return False # Guarding against 0 division
+
+    t = ((p3[0] - p1[0]) * d2[1] - (p3[1] - p1[1]) * d2[0]) / cross_product
+    u = ((p3[0] - p1[0]) * d1[1] - (p3[1] - p1[1]) * d1[0]) / cross_product
+
+    return 0.0 < t < 1.0 and 0.0 < u < 1.0
 # =============================================================================
 # DATA CLASSES
 # =============================================================================
@@ -210,32 +233,14 @@ class BikeBridge:
         self.placed_frames  = placed_frames
         self.connection_log = connection_log
 
-    # ─────────────────────────────────────────────────────────────────────
-    # SUPPORTS - simply lowest point of first and last frame.
-    # ─────────────────────────────────────────────────────────────────────
-    @cached_property
-    def pin(self) -> np.ndarray:
-        first_joints = self.placed_frames[0].points
-        lowest_idx   = np.argmin(first_joints[:,1])
-        return first_joints[lowest_idx]
+        self.points, self.corner_index = self.build_points()
 
-    @cached_property
-    def roller(self) -> np.ndarray:
-        last_joints = self.placed_frames[-1].points
-        lowest_idx  = np.argmin(last_joints[:,1])
-        return last_joints[lowest_idx]
+    def build_points(self):
+        n_frames = len(self.placed_frames)
+        insertions: dict[tuple[int, int], list[tuple[float, np.ndarray]]] = defaultdict(list)
 
-    # ─────────────────────────────────────────────────────────────────────
-    # CONNECTIONS
-    # ─────────────────────────────────────────────────────────────────────
-    @cached_property
-    def connections(self):
-        target_lines    = []
-        candidate_lines = []
-
-        for i, (target, candidate, mirror) in enumerate(self.connection_log):
-            if i == 0:
-                continue   # +++ first frame is not relevant for connections
+        for i in range(1, n_frames):
+            target, candidate, _ = self.connection_log[i]
 
             target_frame    = self.placed_frames[i - 1]
             candidate_frame = self.placed_frames[i]
@@ -243,59 +248,324 @@ class BikeBridge:
             ta, tb = Pairs[target.value]
             ca, cb = Pairs[candidate.value]
 
-            target_lines.append((target_frame.points[ta], target_frame.points[tb]))
-            candidate_lines.append((candidate_frame.points[ca], candidate_frame.points[cb]))
+            target_a, target_b       = target_frame.points[ta],    target_frame.points[tb]
+            candidate_a, candidate_b = candidate_frame.points[ca], candidate_frame.points[cb]
 
-        connection_sets = []
-
-        for i, ((target_a, target_b), (candidate_a, candidate_b)) in enumerate(
-            zip(target_lines, candidate_lines), start=1
-        ):
-            target_mirror    = self.connection_log[i - 1][2]
-            candidate_mirror = self.connection_log[i][2]
-
-            if target_mirror != candidate_mirror:
-                connection_sets.append([
-                    [target_a, candidate_a],
-                    [target_b, candidate_b],
-                ])
-            else:
-                connection_sets.append([
-                    [target_a, candidate_b],
-                    [target_b, candidate_a],
-                ])
-
-        long_side  = []
-        short_side = []
-        for connection in connection_sets:
-            [t_a, c_a], [t_b, c_b] = connection
-
-            target_len    = np.linalg.norm(t_b - t_a)
-            candidate_len = np.linalg.norm(c_b - c_a)
+            target_len    = np.linalg.norm(target_b - target_a)
+            candidate_len = np.linalg.norm(candidate_b - candidate_a)
 
             if target_len >= candidate_len:
-                long_side.append([t_a, t_b])
-                short_side.append([c_a, c_b])
+                long_frame_idx, long_edge_id = i - 1, target.value
+                long_a, long_b               = target_a, target_b
+                short_a, short_b             = candidate_a, candidate_b
             else:
-                long_side.append([c_a, c_b])
-                short_side.append([t_a, t_b])
+                long_frame_idx, long_edge_id = i, candidate.value
+                long_a, long_b               = candidate_a, candidate_b
+                short_a, short_b             = target_a, target_b
 
-        perpendicular_points = []
-        for (long_a, long_b), (short_a, short_b) in zip(long_side, short_side):
             ab    = long_b - long_a
             ab_sq = np.dot(ab, ab)
 
-            projected = []
             for short_pt in (short_a, short_b):
                 t = np.dot(short_pt - long_a, ab) / ab_sq
                 assert 0.0 <= t <= 1.0, (
-                    f"Perpendicular projection fell outside long line segment (t={t:.4f}). "
-                    f"This should be geometrically impossible — check upstream logic."
+                    f"Perpendicular projection fell outside long edge segment (t={t:.4f}) "
+                    f"on frame {long_frame_idx}, edge {long_edge_id}."
                 )
                 foot = long_a + t * ab
-                projected.append(foot)
+                insertions[(long_frame_idx, long_edge_id)].append((t, foot))
 
-            perpendicular_points.append(projected)
+        points       : list[list[np.ndarray]] = []
+        corner_index : list[list[int]]        = []
+
+        for frame_idx, frame in enumerate(self.placed_frames):
+            frame_points       = []
+            frame_corner_index = [0, 0, 0, 0, 0]
+
+            for corner_id in range(5):
+                frame_corner_index[corner_id] = len(frame_points)
+                frame_points.append(frame.points[corner_id])
+
+                edge_id = corner_id
+                edge_insertions = sorted(insertions.get((frame_idx, edge_id), []), key=lambda pair: pair[0])
+                for _, point in edge_insertions:
+                    frame_points.append(point)
+
+            points.append(frame_points)
+            corner_index.append(frame_corner_index)
+
+        return points, corner_index
+
+    def tube_indices(self, edge_id: int) -> list[list[int]]:
+        corner_a, corner_b = Pairs[edge_id]
+
+        if corner_a < corner_b:
+            return [
+                list(range(frame_map[corner_a], frame_map[corner_b] + 1))
+                for frame_map in self.corner_index
+            ]
+
+        # Wraparound case — only edge 4 (SS_MID, corners 4 -> 0)
+        result = []
+        for frame_idx, frame_map in enumerate(self.corner_index):
+            n_points = len(self.points[frame_idx])
+            indices  = list(range(frame_map[corner_a], n_points)) + [frame_map[corner_b]]
+            result.append(indices)
+        return result
+
+    @cached_property
+    def top_tubes(self) -> list[list[int]]:
+        return self.tube_indices(0)
+
+    @cached_property
+    def head_tubes(self) -> list[list[int]]:
+        return self.tube_indices(1)
+
+    @cached_property
+    def down_tubes(self) -> list[list[int]]:
+        return self.tube_indices(2)
+
+    @cached_property
+    def chain_stays(self) -> list[list[int]]:
+        return self.tube_indices(3)
+
+    @cached_property
+    def seat_stays(self) -> list[list[int]]:
+        return self.tube_indices(4)
+
+    @cached_property
+    def seat_tubes(self) -> list[list[int]]:
+        return [[frame_map[3], frame_map[0]] for frame_map in self.corner_index] 
+
+    @cached_property
+    def connections(self):
+        n_frames = len(self.placed_frames)
+        connection_sets = []
+
+        for i in range(1, n_frames):
+            target, candidate, _ = self.connection_log[i]
+
+            target_frame_idx    = i - 1
+            candidate_frame_idx = i
+
+            ta, tb = Pairs[target.value]
+            ca, cb = Pairs[candidate.value]
+
+            target_a_id    = (target_frame_idx,    self.corner_index[target_frame_idx][ta])
+            target_b_id    = (target_frame_idx,    self.corner_index[target_frame_idx][tb])
+            candidate_a_id = (candidate_frame_idx, self.corner_index[candidate_frame_idx][ca])
+            candidate_b_id = (candidate_frame_idx, self.corner_index[candidate_frame_idx][cb])
+
+            # Recompute which frame's edge is the long one for this connection
+            target_frame_obj    = self.placed_frames[target_frame_idx]
+            candidate_frame_obj = self.placed_frames[candidate_frame_idx]
+            target_len    = np.linalg.norm(target_frame_obj.points[tb]    - target_frame_obj.points[ta])
+            candidate_len = np.linalg.norm(candidate_frame_obj.points[cb] - candidate_frame_obj.points[ca])
+            target_is_long = target_len >= candidate_len
+
+            # Existing straight/cross mirror pairing
+            target_mirror    = self.connection_log[i - 1][2]
+            candidate_mirror = self.connection_log[i][2]
+
+            if target_mirror == candidate_mirror:
+                pair_1 = (target_a_id, candidate_b_id)
+                pair_2 = (target_b_id, candidate_a_id)
+            else:
+                pair_1 = (target_a_id, candidate_a_id)
+                pair_2 = (target_b_id, candidate_b_id)
+
+            # Reorder each pair to [long_id, short_id], then append the perpendicular point
+            triples = []
+            for target_side_id, candidate_side_id in (pair_1, pair_2):
+                long_id, short_id = (target_side_id, candidate_side_id) if target_is_long \
+                                    else (candidate_side_id, target_side_id)
+
+                long_frame_idx, long_local_idx = long_id
+                frame_point_count = len(self.points[long_frame_idx])
+
+                # Which corner role (a or b) does the long point hold within its own pair-role?
+                is_a_role = (long_id == target_a_id) or (long_id == candidate_a_id)
+
+                if is_a_role:
+                    perp_local_idx = (long_local_idx + 1) % frame_point_count
+                else:
+                    perp_local_idx = (long_local_idx - 1) % frame_point_count
+
+                perp_id = (long_frame_idx, perp_local_idx)
+                triples.append([long_id, short_id, perp_id])
+
+            connection_sets.append(triples)
 
         return connection_sets
+    
+    @cached_property
+    def pin(self):
+        first_frame_points = np.array(self.points[0])
+        local_idx = int(np.argmin(first_frame_points[:, 1]))
+        return (0, local_idx)
 
+    @cached_property
+    def roller(self):
+        last_frame_idx    = len(self.points) - 1
+        last_frame_points = np.array(self.points[last_frame_idx])
+        local_idx = int(np.argmin(last_frame_points[:, 1]))
+        return (last_frame_idx, local_idx)  
+    
+    @cached_property
+    def load_data(self):
+        n_frames = len(self.placed_frames)
+
+        raw_candidates = []
+        for frame_idx in range(n_frames):
+            for corner_id in (0, 3):
+                local_idx = self.corner_index[frame_idx][corner_id]
+                point     = self.points[frame_idx][local_idx]
+                raw_candidates.append(((frame_idx, local_idx), point))
+
+        tube_index_lists_per_frame = [[] for _ in range(n_frames)]
+        for prop_name in OUTER_TUBE_PROPERTIES:
+            per_frame_indices = getattr(self, prop_name)
+            for frame_idx, index_list in enumerate(per_frame_indices):
+                tube_index_lists_per_frame[frame_idx].append(index_list)
+
+        valid_candidates = []
+        for (frame_idx, local_idx), point in raw_candidates:
+            ray_origin = point + np.array([0.0, IV.connection_offset / 2.0], dtype=np.float32)
+            ray_end    = ray_origin + np.array([0.0, IV.ray_height], dtype=np.float32)
+
+            window_start = max(0, frame_idx - 2)
+            window_end   = min(n_frames - 1, frame_idx + 2)
+
+            blocked = False
+            for window_frame_idx in range(window_start, window_end + 1):
+                for tube_index_list in tube_index_lists_per_frame[window_frame_idx]:
+                    for k in range(len(tube_index_list) - 1):
+                        seg_a = self.points[window_frame_idx][tube_index_list[k]]
+                        seg_b = self.points[window_frame_idx][tube_index_list[k + 1]]
+                        if segments_intersect(ray_origin, ray_end, seg_a, seg_b):
+                            blocked = True
+                            break
+                    if blocked:
+                        break
+                if blocked:
+                    break
+
+            if not blocked:
+                valid_candidates.append(((frame_idx, local_idx), point))
+
+        if len(valid_candidates) < IV.load_divider:
+            return [], False
+
+        xs = np.array([point[0] for _, point in valid_candidates], dtype=np.float32)
+        x_min, x_max = float(xs.min()), float(xs.max())
+        assert x_max > x_min, (
+            "All valid load candidates share the same X value — cannot spread selection."
+        )
+
+        normalized_xs = (xs - x_min) / (x_max - x_min)
+        targets       = np.linspace(0.0, 1.0, IV.load_divider)
+
+        picked   = set()
+        selected = []
+        for target in targets:
+            distances = np.abs(normalized_xs - target)
+            for idx in picked:
+                distances[idx] = np.inf
+            best = int(np.argmin(distances))
+            picked.add(best)
+            selected.append(valid_candidates[best][0])
+
+        return selected, True
+
+    @cached_property
+    def load_points(self):
+        ids, _ = self.load_data
+        return ids
+
+    @cached_property
+    def load_valid(self):
+        _, valid = self.load_data
+        return valid
+
+    @cached_property
+    def tension_data(self):
+        # Step 1 — one candidate per frame: its lowest (min z) raw corner
+        candidates = []  # list of (id, point) pairs, one per frame
+        for frame_idx, frame in enumerate(self.placed_frames):
+            corner_id = int(np.argmin(frame.points[:, 1]))
+            local_idx = self.corner_index[frame_idx][corner_id]
+            point     = self.points[frame_idx][local_idx]
+            candidates.append(((frame_idx, local_idx), point))
+
+        # Step 2 — sort left to right by X
+        candidates.sort(key=lambda entry: entry[1][0])
+
+        # Step 3 — bail out if fewer than 2 candidates
+        if len(candidates) < 2:
+            return [], False
+
+        # Step 4 — greedy chord building
+        line_out = []
+        i = 0
+        while i < len(candidates):
+            current_id, current_pt = candidates[i]
+            end_idxs = list(range(i + 1, min(i + 1 + IV.tension_count, len(candidates))))
+
+            if not end_idxs:
+                break
+
+            chord_options = []
+            for j in end_idxs:
+                end_id, end_pt = candidates[j]
+                length = float(np.linalg.norm(end_pt - current_pt))
+                chord_options.append((j, end_id, end_pt, length))
+
+            low, high = IV.tension_thresh
+            chord_options = [option for option in chord_options if low <= option[3] <= high]
+
+            if not chord_options:
+                i += 1
+                continue
+
+            # Intersection filter — trim ends, check against every frame's 5 raw corner-to-corner edges
+            valid_options = []
+            for j, end_id, end_pt, length in chord_options:
+                direction     = (end_pt - current_pt) / length
+                trimmed_start = current_pt + IV.tension_trim * direction
+                trimmed_end   = end_pt     - IV.tension_trim * direction
+
+                intersects = False
+                for frame in self.placed_frames:
+                    for corner_a, corner_b in Pairs.values():
+                        if segments_intersect(
+                            trimmed_start, trimmed_end,
+                            frame.points[corner_a], frame.points[corner_b]
+                        ):
+                            intersects = True
+                            break
+                    if intersects:
+                        break
+
+                if not intersects:
+                    valid_options.append((j, end_id, end_pt, length))
+
+            if not valid_options:
+                i += 1
+                continue
+
+            best_j, best_end_id, _, _ = max(valid_options, key=lambda option: option[3])
+            line_out.append((current_id, best_end_id))
+            i = best_j
+
+        tension_success = len(line_out) > 0
+        return line_out, tension_success
+
+    @cached_property
+    def tension_lines(self):
+        lines, _ = self.tension_data
+        return lines
+
+    @cached_property
+    def tension_valid(self):
+        _, valid = self.tension_data
+        return valid

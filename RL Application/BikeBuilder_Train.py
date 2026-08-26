@@ -91,7 +91,7 @@ print(f"Logging to: {log_dir}")
 # =============================================================================
 env_kwargs = dict(
     obs_type        = 'mid',       # 'combined' | 'edge' | 'mid' | 'angle'
-    stock_mask_mode = 'binary',  # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
+    stock_mask_mode = 'binary',    # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
     frame_stock     = frame_stock,
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
@@ -143,10 +143,10 @@ model_kwargs = dict(
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
-    n_steps         = 512, # 2048 / 4 environments
-    batch_size      = 256,
-    ent_coef        = 0.03,
-    n_epochs        = 20,
+    n_steps         = 256, # 2048 / 4 environments
+    batch_size      = 128,
+    ent_coef        = 0.0,
+    n_epochs        = 10,
 )
 
 callback_kwargs = dict(

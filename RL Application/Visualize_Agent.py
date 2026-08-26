@@ -67,12 +67,13 @@ env = gym.make(
     use_stock_areas         = False,
     enable_termination      = True,
     strict_termination      = False,
+    visual_debugging    = True,
     normalization_type  = 'bounding',
     render_mode         = 'human',
     render_labels       = True,
 )
 
-env.metadata["render_fps"] = 45
+env.metadata["render_fps"] = 180
 
 # =============================================================================
 # MODEL

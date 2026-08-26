@@ -29,6 +29,7 @@ class InternalVariables:
     intersect_buffer     : int   = 3
     termination_vicinity : float = 300.0
     angle_rounding       : int   = 3
+    ray_height           : float = 3000.0
     # ---  Reward  Variables  ---
     distance_threshold : float = 500.0
     progress_threshold : float = 1500.0
@@ -59,6 +60,11 @@ class InternalVariables:
     centroid_colour: tuple[int, int, int] = (255, 0, 0)
     centroid_radius: int = 4
     connector_colour  : tuple[int, int, int] = (0, 150, 150)
+    # ---  FEA pre-flight  ---
+    load_divider   : int = 5
+    tension_trim   = 10.0         # mm — trim from each end before the intersection check
+    tension_count  = 5            # lookahead window when building chords
+    tension_thresh = (2, 4000)    # mm — (min, max) allowed chord length
     # ---  FEA  Rendering  ---
     support_radius : int = 6
     pin_colour     : tuple[int, int, int] = (186, 130, 230)

@@ -24,6 +24,7 @@ from environment.envs.BikeBuilder_Utilities import (
     build_observation_points_positive,
     frames_intersect_proximity
     )
+
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
 
 # =============================================================================
@@ -54,6 +55,7 @@ class BikeBuilder_Env(gym.Env):
             use_stock_areas           = False,                    # Added: Optional stock area injector
             render_labels             = False,                    # Added: Allows for more extensive rendering
             render_centroids          = False,
+            visual_debugging          = False,
             enable_termination : bool = False,          # Added: Enables termination logics
             strict_termination : bool = False,          # Added: If true, termination only yields rewards if the frame has not exceeded the curve
     ):
@@ -86,10 +88,14 @@ class BikeBuilder_Env(gym.Env):
             self.frame_stock[0], self.obs_type, IV.stock_norm_range
         ).shape[0]
 
-        self.current_frame_shape = (
-            (self.buffer_size, self.points_per_frame, 2) if self.current_frame_sweep
-            else (self.points_per_frame, 2)
-        )
+        if self.current_frame_sweep:
+            assert self.buffer_size is not None, (
+                "buffer_size must be set when current_frame_sweep is True."
+            )
+            self.current_frame_shape = (self.buffer_size, self.points_per_frame, 2)
+        else:
+            self.current_frame_shape = (self.points_per_frame, 2)
+            
         if self.obs_type == "angle":
             stock_geom_low = -1.0
         elif self.use_positive_stock_norm:
@@ -213,7 +219,8 @@ class BikeBuilder_Env(gym.Env):
         # Render Initialization
         self.render_labels    = render_labels
         self.render_centroids = render_centroids
-        self.window_scale  = window_scale
+        self.window_scale     = window_scale
+        self.visual_debugging = visual_debugging
         # Unpadded drawing size — drives world-to-pixel scale, unchanged from before
         self.draw_size = [x_max // window_scale, z_max // window_scale]
         # Padded canvas — actual pygame Surface size for the drawing area
@@ -261,7 +268,9 @@ class BikeBuilder_Env(gym.Env):
         "p_reward"         : self.p_reward,
         "terminated"       : self.terminated,
         "overshot"         : self.overshot,
-        "true_termination" : self.true_termination
+        "true_termination" : self.true_termination,
+        "load_valid"       : self.load_valid,
+        "tension_valid"    : self.tension_valid,
         }
     # ─────────────────────────────────────────────────────────────────────────
     # ACTION MASKING FUNCTION (outdated - i think)
@@ -308,6 +317,8 @@ class BikeBuilder_Env(gym.Env):
         self.terminated       = False
         self.overshot         = False
         self.true_termination = False
+        self.load_valid       = False
+        self.tension_valid    = False
         self.grammar.reset()
 
         # Connection log for BikeBridge class
@@ -337,6 +348,8 @@ class BikeBuilder_Env(gym.Env):
         self.terminated       = False
         self.overshot         = False
         self.true_termination = False
+        self.load_valid       = False
+        self.tension_valid    = False
 
         # Setting reuse and ccx flags
         self.reuse_counter = False
@@ -455,6 +468,8 @@ class BikeBuilder_Env(gym.Env):
         # FINITE ELEMENT ANALYSIS
         if self.true_termination:
             self.bike_bridge = BikeBridge(self.placed_frames, self.connection_log)
+            self.load_valid      = self.bike_bridge.load_valid
+            self.tension_valid   = self.bike_bridge.tension_valid
 
         if self.render_labels:
             self.placement_rewards.append((float(self.d_reward), float(self.p_reward), float(terminal_reward)))
@@ -493,114 +508,233 @@ class BikeBuilder_Env(gym.Env):
         canvas = pygame.Surface(self.window_size)
         canvas.fill((255,255,255)) # White
 
-        # Rendering Grid
-        x = 0
-        while x <= self.bounds["x_max"]:
-            px = coordinate_to_pixel((x, 0), self.draw_size, self.bounds, self.bounding_range)[0]
-            pygame.draw.line(canvas, IV.grid_colour, (px, 0), (px, self.canvas_size[1]), 1)
-            label = self.font.render(f"{int(x / 1000)}m", True, IV.label_colour)
-            canvas.blit(label, (px - label.get_width() // 2, self.canvas_size[1] - label.get_height() - 2))
-            x += IV.grid_spacing
-        
-        z = 0
-        while z <= self.bounds["z_max"]:
-            pz = coordinate_to_pixel((0, z), self.draw_size, self.bounds, self.bounding_range)[1]
-            pygame.draw.line(canvas, IV.grid_colour, (0, pz), (self.canvas_size[0], pz), 1)
-            label = self.font.render(f"{int(z / 1000)}m", True, IV.label_colour)
-            canvas.blit(label, (2, pz - label.get_height() // 2))
-            z += IV.grid_spacing
-        
-        # Drawing the guide curve
-        curve_pixels = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in self.guide_curve]
-        pygame.draw.lines(canvas, IV.g_curve_colour, False, curve_pixels, 2)
-
-        # Drawing centroids
-        if self.render_centroids:
-            for frame in self.placed_frames:
-                centroid_px = coordinate_to_pixel(frame.Centroid, self.draw_size, self.bounds, self.bounding_range)
-                pygame.draw.circle(canvas, IV.centroid_colour, centroid_px, IV.centroid_radius)
-
-        # Drawing pin and roller
-        # Drawing supports (only if BikeBridge exists this episode)
-        if self.bike_bridge is not None:
-            pin_px    = coordinate_to_pixel(self.bike_bridge.pin,    self.draw_size, self.bounds, self.bounding_range)
-            roller_px = coordinate_to_pixel(self.bike_bridge.roller, self.draw_size, self.bounds, self.bounding_range)
-            pygame.draw.circle(canvas, IV.pin_colour,    pin_px,    IV.support_radius)
-            pygame.draw.circle(canvas, IV.roller_colour, roller_px, IV.support_radius)
-
-            for connection_set in self.bike_bridge.connections:
-                for (point_a, point_b) in connection_set:
-                    px_a = coordinate_to_pixel(point_a, self.draw_size, self.bounds, self.bounding_range)
-                    px_b = coordinate_to_pixel(point_b, self.draw_size, self.bounds, self.bounding_range)
-                    pygame.draw.line(canvas, IV.connector_colour, px_a, px_b, 2)
-
-        # Drawing labels for frames
-        if self.render_labels:
-            for i, (frame, (d_r, p_r, t_r)) in enumerate(zip(self.placed_frames, self.placement_rewards)):
-                points = frame.points
-                j      = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in points]
-                t      = IV.frame_thickness
-                pygame.draw.line(canvas, (0, 0, 0), j[0], j[1], t)  # TT
-                pygame.draw.line(canvas, (0, 0, 0), j[1], j[2], t)  # HT
-                pygame.draw.line(canvas, (0, 0, 0), j[2], j[3], t)  # DT
-                pygame.draw.line(canvas, (0, 0, 0), j[3], j[4], t)  # CS
-                pygame.draw.line(canvas, (0, 0, 0), j[4], j[0], t)  # SS
-                pygame.draw.line(canvas, (0, 0, 0), j[3], j[0], t)  # ST
-
-                # Reward label — offset from centroid, alternating up/down by placement order
-                direction    = 1 if i % 2 == 0 else -1
-                anchor_world = frame.Centroid
-                label_world  = anchor_world + np.array([0.0, direction * IV.rew_label_offset], dtype=np.float32)
-
-                anchor_px = coordinate_to_pixel(anchor_world, self.draw_size, self.bounds, self.bounding_range)
-                label_px  = coordinate_to_pixel(label_world,  self.draw_size, self.bounds, self.bounding_range)
-
-                margin   = 60
-                label_px = (
-                    int(np.clip(label_px[0], margin, self.canvas_size[0] - margin)),
-                    int(np.clip(label_px[1], 20, self.canvas_size[1] - 20)),
-                )
-
-                pygame.draw.line(canvas, IV.leader_colour, anchor_px, label_px, 1)
-
-                label_text = f"d:{d_r:.2f} p:{p_r:.2f}"
-                if t_r != 0.0:
-                    label_text += f" t:{t_r:.2f}"
-                label_surface = self.label_font.render(label_text, True, IV.rew_label_colour)
-                canvas.blit(label_surface, (label_px[0] - label_surface.get_width() // 2,
-                                            label_px[1] - label_surface.get_height() // 2))
+        if self.visual_debugging and self.bike_bridge is not None:
+            self.render_debug(canvas)
         else:
-            # Draw the bike frames
-            for frame in self.placed_frames:
-                points = frame.points
-                j      = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in points]
-                t      = IV.frame_thickness
 
-                pygame.draw.line(canvas, (0, 0, 0), j[0], j[1], t)  # TT
-                pygame.draw.line(canvas, (0, 0, 0), j[1], j[2], t)  # HT
-                pygame.draw.line(canvas, (0, 0, 0), j[2], j[3], t)  # DT
-                pygame.draw.line(canvas, (0, 0, 0), j[3], j[4], t)  # CS
-                pygame.draw.line(canvas, (0, 0, 0), j[4], j[0], t)  # SS
-                pygame.draw.line(canvas, (0, 0, 0), j[3], j[0], t)  # ST
+            # Rendering Grid
+            x = 0
+            while x <= self.bounds["x_max"]:
+                px = coordinate_to_pixel((x, 0), self.draw_size, self.bounds, self.bounding_range)[0]
+                pygame.draw.line(canvas, IV.grid_colour, (px, 0), (px, self.canvas_size[1]), 1)
+                label = self.font.render(f"{int(x / 1000)}m", True, IV.label_colour)
+                canvas.blit(label, (px - label.get_width() // 2, self.canvas_size[1] - label.get_height() - 2))
+                x += IV.grid_spacing
+            
+            z = 0
+            while z <= self.bounds["z_max"]:
+                pz = coordinate_to_pixel((0, z), self.draw_size, self.bounds, self.bounding_range)[1]
+                pygame.draw.line(canvas, IV.grid_colour, (0, pz), (self.canvas_size[0], pz), 1)
+                label = self.font.render(f"{int(z / 1000)}m", True, IV.label_colour)
+                canvas.blit(label, (2, pz - label.get_height() // 2))
+                z += IV.grid_spacing
+            
+            # Drawing the guide curve
+            curve_pixels = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in self.guide_curve]
+            pygame.draw.lines(canvas, IV.g_curve_colour, False, curve_pixels, 2)
 
-        # Draw the side panel
-        if self.render_labels:
-            panel_x = self.canvas_size[0]
-            pygame.draw.rect(canvas, IV.side_panel_colour, (panel_x, 0, IV.side_panel_width, self.window_size[1]))
+            # Drawing centroids
+            if self.render_centroids:
+                for frame in self.placed_frames:
+                    centroid_px = coordinate_to_pixel(frame.Centroid, self.draw_size, self.bounds, self.bounding_range)
+                    pygame.draw.circle(canvas, IV.centroid_colour, centroid_px, IV.centroid_radius)
 
-            panel_y = 10
-            for entry in self.action_log:
-                entry_surface = self.panel_font.render(entry, True, IV.side_panel_text_colour)
-                canvas.blit(entry_surface, (panel_x + 10, panel_y))
-                panel_y += IV.side_panel_line_height
-                if panel_y > self.window_size[1] - IV.side_panel_line_height:
-                    break   # stop rather than overflow past the visible window
+            # Drawing labels for frames
+            if self.render_labels:
+                for i, (frame, (d_r, p_r, t_r)) in enumerate(zip(self.placed_frames, self.placement_rewards)):
+                    points = frame.points
+                    j      = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in points]
+                    t      = IV.frame_thickness
+                    pygame.draw.line(canvas, (0, 0, 0), j[0], j[1], t)  # TT
+                    pygame.draw.line(canvas, (0, 0, 0), j[1], j[2], t)  # HT
+                    pygame.draw.line(canvas, (0, 0, 0), j[2], j[3], t)  # DT
+                    pygame.draw.line(canvas, (0, 0, 0), j[3], j[4], t)  # CS
+                    pygame.draw.line(canvas, (0, 0, 0), j[4], j[0], t)  # SS
+                    pygame.draw.line(canvas, (0, 0, 0), j[3], j[0], t)  # ST
+
+                    # Reward label — offset from centroid, alternating up/down by placement order
+                    direction    = 1 if i % 2 == 0 else -1
+                    anchor_world = frame.Centroid
+                    label_world  = anchor_world + np.array([0.0, direction * IV.rew_label_offset], dtype=np.float32)
+
+                    anchor_px = coordinate_to_pixel(anchor_world, self.draw_size, self.bounds, self.bounding_range)
+                    label_px  = coordinate_to_pixel(label_world,  self.draw_size, self.bounds, self.bounding_range)
+
+                    margin   = 60
+                    label_px = (
+                        int(np.clip(label_px[0], margin, self.canvas_size[0] - margin)),
+                        int(np.clip(label_px[1], 20, self.canvas_size[1] - 20)),
+                    )
+
+                    pygame.draw.line(canvas, IV.leader_colour, anchor_px, label_px, 1)
+
+                    label_text = f"d:{d_r:.2f} p:{p_r:.2f}"
+                    if t_r != 0.0:
+                        label_text += f" t:{t_r:.2f}"
+                    label_surface = self.label_font.render(label_text, True, IV.rew_label_colour)
+                    canvas.blit(label_surface, (label_px[0] - label_surface.get_width() // 2,
+                                                label_px[1] - label_surface.get_height() // 2))
+            else:
+                # Draw the bike frames
+                for frame in self.placed_frames:
+                    points = frame.points
+                    j      = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in points]
+                    t      = IV.frame_thickness
+
+                    pygame.draw.line(canvas, (0, 0, 0), j[0], j[1], t)  # TT
+                    pygame.draw.line(canvas, (0, 0, 0), j[1], j[2], t)  # HT
+                    pygame.draw.line(canvas, (0, 0, 0), j[2], j[3], t)  # DT
+                    pygame.draw.line(canvas, (0, 0, 0), j[3], j[4], t)  # CS
+                    pygame.draw.line(canvas, (0, 0, 0), j[4], j[0], t)  # SS
+                    pygame.draw.line(canvas, (0, 0, 0), j[3], j[0], t)  # ST
+
+            # Draw the side panel
+            if self.render_labels:
+                panel_x = self.canvas_size[0]
+                pygame.draw.rect(canvas, IV.side_panel_colour, (panel_x, 0, IV.side_panel_width, self.window_size[1]))
+
+                panel_y = 10
+                for entry in self.action_log:
+                    entry_surface = self.panel_font.render(entry, True, IV.side_panel_text_colour)
+                    canvas.blit(entry_surface, (panel_x + 10, panel_y))
+                    panel_y += IV.side_panel_line_height
+                    if panel_y > self.window_size[1] - IV.side_panel_line_height:
+                        break   # stop rather than overflow past the visible window
 
         # Build Canvas
         self.window.blit(canvas, canvas.get_rect())
         pygame.event.pump()
         pygame.display.update()
         self.clock.tick(self.metadata["render_fps"])
+
+    def render_debug(self, canvas):
+        dot_radius       = 4
+        dot_colour       = (0, 0, 0)
+        label_colour     = (255, 0, 0)
+        label_font_size  = 12
+        label_radius     = 18      # pixel distance the label sits out from its point, along the centroid→point direction
+        leader_colour    = (150, 150, 150)
+        leader_thickness = 1
+        tube_thickness   = 3
+        connection_colour    = (0, 128, 128)
+        connection_thickness = 2
+        pin_colour        = (186, 130, 230)
+        roller_colour     = (98, 0, 150)
+        support_radius    = 6
+        load_point_colour = (255, 0, 0)
+        load_point_radius = 7
+        tension_colour   = (218, 165, 32)
+        tension_thickness = 2
+
+        debug_print_frame = 8   # set to None to disable, or an int frame index to inspect
+
+        tube_colours = {
+            "top_tube"   : (198, 244, 178),
+            "head_tube"  : (154, 224, 130),
+            "down_tube"  : (105, 197, 90),
+            "chain_stay" : (63, 161, 60),
+            "seat_stay"  : (34, 120, 40),
+            "seat_tube"  : (10, 74, 24),
+        }
+
+        debug_font = pygame.font.SysFont('Arial', label_font_size)
+        bridge     = self.bike_bridge
+        assert bridge is not None
+
+        if debug_print_frame is not None and debug_print_frame < len(bridge.points):
+            print(f"\n--- Frame {debug_print_frame} point order ---")
+            for local_idx, point in enumerate(bridge.points[debug_print_frame]):
+                print(f"  [{local_idx}] {point}")
+            print(f"Corner index map: {bridge.corner_index[debug_print_frame]}")
+
+        tube_sets = {
+            "top_tube"   : bridge.top_tubes,
+            "head_tube"  : bridge.head_tubes,
+            "down_tube"  : bridge.down_tubes,
+            "chain_stay" : bridge.chain_stays,
+            "seat_stay"  : bridge.seat_stays,
+            "seat_tube"  : bridge.seat_tubes,
+        }
+
+        # Draw tubes first, so points/labels sit visibly on top
+        for tube_name, per_frame_indices in tube_sets.items():
+            colour = tube_colours[tube_name]
+            for frame_idx, index_list in enumerate(per_frame_indices):
+                assert len(index_list) >= 2, (
+                    f"{tube_name} on frame {frame_idx} resolved to fewer than 2 points — "
+                    f"check BikeBridge.build_points()."
+                )
+                frame_points = bridge.points[frame_idx]
+                pixel_points = [
+                    coordinate_to_pixel(frame_points[idx], self.draw_size, self.bounds, self.bounding_range)
+                    for idx in index_list
+                ]
+                pygame.draw.lines(canvas, colour, False, pixel_points, tube_thickness)
+                
+        # Draw every point as a dot, labelled with its local storage order,
+        # offset radially outward from the frame's centroid, with a leader line back to it
+        for frame_idx, frame in enumerate(bridge.placed_frames):
+            frame_points = bridge.points[frame_idx]
+            centroid_px  = coordinate_to_pixel(frame.Centroid, self.draw_size, self.bounds, self.bounding_range)
+
+            for local_idx, point in enumerate(frame_points):
+                px = coordinate_to_pixel(point, self.draw_size, self.bounds, self.bounding_range)
+                pygame.draw.circle(canvas, dot_colour, px, dot_radius)
+
+                direction = np.array([centroid_px[0] - px[0], centroid_px[1] - px[1]], dtype=np.float32)
+                norm      = np.linalg.norm(direction)
+                assert norm > 1e-6, (
+                    f"Point {local_idx} on frame {frame_idx} coincides with its own centroid — "
+                    f"cannot compute a label direction."
+                )
+                unit_dir = direction / norm
+
+                label_px = (
+                    int(px[0] + unit_dir[0] * label_radius),
+                    int(px[1] + unit_dir[1] * label_radius),
+                )
+
+                pygame.draw.line(canvas, leader_colour, px, label_px, leader_thickness)
+
+                label_surface = debug_font.render(str(local_idx), True, label_colour)
+                canvas.blit(label_surface, (
+                    label_px[0] - label_surface.get_width()  // 2,
+                    label_px[1] - label_surface.get_height() // 2,
+                ))
+
+        # Draw connections
+        for connection_set in bridge.connections:
+            for triple in connection_set:
+                pixel_points = [
+                    coordinate_to_pixel(bridge.points[frame_idx][local_idx], self.draw_size, self.bounds, self.bounding_range)
+                    for frame_idx, local_idx in triple
+                ]
+                pygame.draw.lines(canvas, connection_colour, False, pixel_points, connection_thickness)
+
+        # Draw supports
+        pin_frame_idx, pin_local_idx = bridge.pin
+        pin_point = bridge.points[pin_frame_idx][pin_local_idx]
+        pin_px    = coordinate_to_pixel(pin_point, self.draw_size, self.bounds, self.bounding_range)
+        pygame.draw.circle(canvas, pin_colour, pin_px, support_radius)
+
+        roller_frame_idx, roller_local_idx = bridge.roller
+        roller_point = bridge.points[roller_frame_idx][roller_local_idx]
+        roller_px    = coordinate_to_pixel(roller_point, self.draw_size, self.bounds, self.bounding_range)
+        pygame.draw.circle(canvas, roller_colour, roller_px, support_radius)
+
+        # Draw tension lines
+        for (start_frame, start_local), (end_frame, end_local) in bridge.tension_lines:
+            start_point = bridge.points[start_frame][start_local]
+            end_point   = bridge.points[end_frame][end_local]
+            start_px = coordinate_to_pixel(start_point, self.draw_size, self.bounds, self.bounding_range)
+            end_px   = coordinate_to_pixel(end_point,   self.draw_size, self.bounds, self.bounding_range)
+            pygame.draw.line(canvas, tension_colour, start_px, end_px, tension_thickness)
+
+        # Draw load points (red) — list is empty if load_valid is False, so nothing renders in that case
+        for frame_idx, local_idx in bridge.load_points:
+            point    = bridge.points[frame_idx][local_idx]
+            point_px = coordinate_to_pixel(point, self.draw_size, self.bounds, self.bounding_range)
+            pygame.draw.circle(canvas, load_point_colour, point_px, load_point_radius)
 
     def close(self) :
             if self.window is not None:

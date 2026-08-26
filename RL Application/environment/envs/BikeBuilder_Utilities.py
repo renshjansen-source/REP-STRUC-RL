@@ -8,17 +8,12 @@ import math
 from scipy.interpolate import interp1d
 
 from internal_variables import IV
-from environment.envs.BikeBuilder_Classes import Plane, BikeFrame, PointDict, Pairs, Vector2D, Point2D, ShapeGrammar
+from environment.envs.BikeBuilder_Classes import Plane, BikeFrame, PointDict, Pairs, Vector2D, Point2D, ShapeGrammar, cross, dot, segments_intersect
 
 # =============================================================================
 # FUNCTIONS - VECTOR AND POINT MANIPULATION
 # =============================================================================
 
-def cross(vector_a: Vector2D, vector_b: Vector2D) -> float:
-    return vector_a[0] * vector_b[1] - vector_a[1] * vector_b[0]
-
-def dot(vector_a: Vector2D, vector_b: Vector2D) -> float:
-    return vector_a[0] * vector_b[0] + vector_a[1] * vector_b[1]
 # CCP = CurveClosestPoint
 def CCP(centroid: Point2D, sampled_curve: np.ndarray) -> tuple[int, np.float32]:
     distances   = np.linalg.norm(sampled_curve - centroid, axis = 1)
@@ -257,20 +252,6 @@ def build_observation_points_positive(frame_stock: list, obs_type: str) -> np.nd
 # =============================================================================
 # FUNCTIONS - PENALTIES
 # =============================================================================
-
-def segments_intersect(p1, p2, p3, p4) -> bool:
-    d1 = p2 - p1
-    d2 = p4 - p3
-    cross_product = cross(d1, d2)
-
-    if abs(cross_product) < IV.intersect_tol:
-        return False # Guarding against 0 division
-
-    t = ((p3[0] - p1[0]) * d2[1] - (p3[1] - p1[1]) * d2[0]) / cross_product
-    u = ((p3[0] - p1[0]) * d1[1] - (p3[1] - p1[1]) * d1[0]) / cross_product
-
-    return 0.0 < t < 1.0 and 0.0 < u < 1.0
-
 def nearest_frames(frame: BikeFrame, candidates: list[BikeFrame], n: int) -> list[BikeFrame]:
     if len(candidates) <= n:
         return candidates
