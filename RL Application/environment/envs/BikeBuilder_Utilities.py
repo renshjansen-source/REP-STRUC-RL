@@ -379,8 +379,8 @@ def check_termination(
 # =============================================================================
 
 def coordinate_to_pixel(point, window_size, bounds, bounding_range):
-    pixel_x = int((point[0] - bounds["x_min"]) * window_size[0] / bounding_range[0])
-    pixel_z = window_size[1] - int((point[1] - bounds["z_min"]) * window_size[1] / bounding_range[1]) # Pygame builds the z-axis downwards
+    pixel_x = int((point[0] - bounds["x_min"]) * window_size[0] / bounding_range[0]) + IV.window_padding
+    pixel_z = window_size[1] - int((point[1] - bounds["z_min"]) * window_size[1] / bounding_range[1]) + IV.window_padding # Pygame builds the z-axis downwards
     pixel_coordinate = (pixel_x, pixel_z)
 
     return pixel_coordinate

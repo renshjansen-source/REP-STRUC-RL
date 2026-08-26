@@ -63,6 +63,7 @@ class BikeBuilder_Callback(BaseCallback):
         self.truncation_tally  = 0
         self.episode_tally     = 0
         self.overshot_tally    = 0
+        self.true_term_tally   = 0
 
     def _log_histogram(self, tag: str, counts: np.ndarray) -> None:
         if self._tb_writer is None or counts.sum() == 0:
@@ -106,6 +107,9 @@ class BikeBuilder_Callback(BaseCallback):
                 if info.get("overshot", False):
                     self.overshot_tally += 1
 
+                if info.get("true_termination", False):
+                    self.true_term_tally += 1
+
         assert self.grammar is not None
         for action in self.locals["actions"]:
             self.grammar.record(action)
@@ -144,6 +148,7 @@ class BikeBuilder_Callback(BaseCallback):
         self.logger.record("termination/truncation_tally",  self.truncation_tally)
         self.logger.record("termination/episode_tally",     self.episode_tally) 
         self.logger.record("termination/overshot_tally", self.overshot_tally)
+        self.logger.record("termination/true_termination_tally", self.true_term_tally)
         
         # --- Behaviour Metrics ---
         if self.placed_frames_counts:

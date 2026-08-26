@@ -143,8 +143,10 @@ model_kwargs = dict(
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
-    n_steps         = 256, # 2048 / 4 environments
-    batch_size      = 128,
+    n_steps         = 512, # 2048 / 4 environments
+    batch_size      = 256,
+    ent_coef        = 0.03,
+    n_epochs        = 20,
 )
 
 callback_kwargs = dict(
@@ -181,6 +183,15 @@ diary.start(
 eval_callback   = EvalCallback(**callback_kwargs) # type: ignore
 custom_callback = BikeBuilder_Callback()
 model           = PPO(**model_kwargs)             # type: ignore
+
+# --- Parameter count check ---
+total_params      = sum(p.numel() for p in model.policy.parameters())
+extractor_params  = sum(p.numel() for p in model.policy.features_extractor.parameters())
+current_net_params = sum(p.numel() for p in model.policy.features_extractor.current_net.parameters())
+print(f"Total policy params:     {total_params}")
+print(f"Features extractor params: {extractor_params}")
+print(f"current_net params:      {current_net_params}")
+# --- end check ---
 
 print("Starting training...")
 model.learn(

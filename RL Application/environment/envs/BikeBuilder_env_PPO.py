@@ -24,7 +24,7 @@ from environment.envs.BikeBuilder_Utilities import (
     build_observation_points_positive,
     frames_intersect_proximity
     )
-from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar
+from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
 
 # =============================================================================
 # Environment Class
@@ -43,7 +43,7 @@ class BikeBuilder_Env(gym.Env):
             guide_curve  : np.ndarray,                  # Pre-sampled in the training file
             stock_areas  = None,
             max_step     = 25,
-            window_scale = 5,
+            window_scale = 8,
             render_mode  = None,
             distance_weight = 1.0,
             progress_weight = 1.0,
@@ -200,8 +200,9 @@ class BikeBuilder_Env(gym.Env):
         self.progress_weight = progress_weight
 
         # Termination initialization
-        self.terminated: bool   = False
-        self.overshot: bool     = False
+        self.terminated :       bool = False
+        self.overshot :         bool = False
+        self.true_termination : bool = False
         self.enable_termination = enable_termination
         self.strict_termination = strict_termination
 
@@ -213,7 +214,11 @@ class BikeBuilder_Env(gym.Env):
         self.render_labels    = render_labels
         self.render_centroids = render_centroids
         self.window_scale  = window_scale
-        self.canvas_size   = [x_max // self.window_scale, z_max // self.window_scale]
+        # Unpadded drawing size — drives world-to-pixel scale, unchanged from before
+        self.draw_size = [x_max // window_scale, z_max // window_scale]
+        # Padded canvas — actual pygame Surface size for the drawing area
+        self.canvas_size = [self.draw_size[0] + 2 * IV.window_padding,
+        self.draw_size[1] + 2 * IV.window_padding]
         self.window_size   = [self.canvas_size[0] + IV.side_panel_width, self.canvas_size[1]]
         self.window        = None
         self.clock         = None
@@ -247,15 +252,16 @@ class BikeBuilder_Env(gym.Env):
 
     def _get_info(self):
         return {
-        "placed_frames": len(self.placed_frames),
-        "current_step" : self.current_step,
-        "max_t"        : self.max_t,
-        "ccx_count"    : self.ccx_counter,
-        "reuse_count"  : self.reuse_counter,
-        "d_reward"     : self.d_reward,
-        "p_reward"     : self.p_reward,
-        "terminated"   : self.terminated,
-        "overshot"     : self.overshot,
+        "placed_frames"    : len(self.placed_frames),
+        "current_step"     : self.current_step,
+        "max_t"            : self.max_t,
+        "ccx_count"        : self.ccx_counter,
+        "reuse_count"      : self.reuse_counter,
+        "d_reward"         : self.d_reward,
+        "p_reward"         : self.p_reward,
+        "terminated"       : self.terminated,
+        "overshot"         : self.overshot,
+        "true_termination" : self.true_termination
         }
     # ─────────────────────────────────────────────────────────────────────────
     # ACTION MASKING FUNCTION (outdated - i think)
@@ -281,6 +287,9 @@ class BikeBuilder_Env(gym.Env):
         self.mirror_flag   : bool             = False
         self.stock_mask    : np.ndarray       = np.ones(len(self.frame_stock), dtype=np.float32)
 
+        # FEA initialization
+        self.bike_bridge : BikeBridge | None = None
+
         # Initializing stock permutation
         if self.shuffle_stock:
             self.perm = self.np_random.permutation(len(self.frame_stock))
@@ -293,12 +302,16 @@ class BikeBuilder_Env(gym.Env):
             self.stock_areas_episode = self.stock_areas[self.perm]              # type: ignore
 
         # Initializing counters
-        self.current_step  = 0
-        self.reuse_counter = False
-        self.ccx_counter   = False
-        self.terminated    = False
-        self.overshot      = False
+        self.current_step     = 0
+        self.reuse_counter    = False
+        self.ccx_counter      = False
+        self.terminated       = False
+        self.overshot         = False
+        self.true_termination = False
         self.grammar.reset()
+
+        # Connection log for BikeBridge class
+        self.connection_log: list[tuple[PointDict, PointDict, bool]] = []
 
         # Initializing sub-rewards
         self.p_reward      = 0
@@ -319,10 +332,11 @@ class BikeBuilder_Env(gym.Env):
     def step(self, action):                                      # type: ignore
 
         # Setting exit conditions
-        terminated      = False
-        terminal_reward = 0.0
-        self.terminated = False
-        self.overshot   = False
+        terminated            = False
+        terminal_reward       = 0.0
+        self.terminated       = False
+        self.overshot         = False
+        self.true_termination = False
 
         # Setting reuse and ccx flags
         self.reuse_counter = False
@@ -382,6 +396,7 @@ class BikeBuilder_Env(gym.Env):
                 self.stock_geometry_episode[action[0]]  = 0.0       # Changed: Stock is now zeroed, no stock mask
                 if self.use_stock_areas:
                     self.stock_areas_episode[action[0]] = 0.0
+            self.connection_log.append((target, candidate, mirror))
             self.current_step  += 1
             
             truncated = self.current_step >= self.max_step
@@ -422,6 +437,7 @@ class BikeBuilder_Env(gym.Env):
             self.stock_geometry_episode[action[0]]  = 0.0
             if self.use_stock_areas:
                 self.stock_areas_episode[action[0]] = 0.0
+        self.connection_log.append((target, candidate, mirror))
         self.current_step += 1
 
         # Termination Check
@@ -431,9 +447,15 @@ class BikeBuilder_Env(gym.Env):
                 self.current_step, self.max_step, self.strict_termination
             )
             reward        += terminal_reward
+            self.true_termination = terminated == True and overshot == False
             self.overshot  = overshot
 
         self.placed_frames.append(placed_frame)
+
+        # FINITE ELEMENT ANALYSIS
+        if self.true_termination:
+            self.bike_bridge = BikeBridge(self.placed_frames, self.connection_log)
+
         if self.render_labels:
             self.placement_rewards.append((float(self.d_reward), float(self.p_reward), float(terminal_reward)))
             if terminated:
@@ -474,7 +496,7 @@ class BikeBuilder_Env(gym.Env):
         # Rendering Grid
         x = 0
         while x <= self.bounds["x_max"]:
-            px = coordinate_to_pixel((x, 0), self.canvas_size, self.bounds, self.bounding_range)[0]
+            px = coordinate_to_pixel((x, 0), self.draw_size, self.bounds, self.bounding_range)[0]
             pygame.draw.line(canvas, IV.grid_colour, (px, 0), (px, self.canvas_size[1]), 1)
             label = self.font.render(f"{int(x / 1000)}m", True, IV.label_colour)
             canvas.blit(label, (px - label.get_width() // 2, self.canvas_size[1] - label.get_height() - 2))
@@ -482,27 +504,41 @@ class BikeBuilder_Env(gym.Env):
         
         z = 0
         while z <= self.bounds["z_max"]:
-            pz = coordinate_to_pixel((0, z), self.canvas_size, self.bounds, self.bounding_range)[1]
+            pz = coordinate_to_pixel((0, z), self.draw_size, self.bounds, self.bounding_range)[1]
             pygame.draw.line(canvas, IV.grid_colour, (0, pz), (self.canvas_size[0], pz), 1)
             label = self.font.render(f"{int(z / 1000)}m", True, IV.label_colour)
             canvas.blit(label, (2, pz - label.get_height() // 2))
             z += IV.grid_spacing
         
         # Drawing the guide curve
-        curve_pixels = [coordinate_to_pixel(p, self.canvas_size, self.bounds, self.bounding_range) for p in self.guide_curve]
+        curve_pixels = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in self.guide_curve]
         pygame.draw.lines(canvas, IV.g_curve_colour, False, curve_pixels, 2)
 
         # Drawing centroids
         if self.render_centroids:
             for frame in self.placed_frames:
-                centroid_px = coordinate_to_pixel(frame.Centroid, self.canvas_size, self.bounds, self.bounding_range)
+                centroid_px = coordinate_to_pixel(frame.Centroid, self.draw_size, self.bounds, self.bounding_range)
                 pygame.draw.circle(canvas, IV.centroid_colour, centroid_px, IV.centroid_radius)
+
+        # Drawing pin and roller
+        # Drawing supports (only if BikeBridge exists this episode)
+        if self.bike_bridge is not None:
+            pin_px    = coordinate_to_pixel(self.bike_bridge.pin,    self.draw_size, self.bounds, self.bounding_range)
+            roller_px = coordinate_to_pixel(self.bike_bridge.roller, self.draw_size, self.bounds, self.bounding_range)
+            pygame.draw.circle(canvas, IV.pin_colour,    pin_px,    IV.support_radius)
+            pygame.draw.circle(canvas, IV.roller_colour, roller_px, IV.support_radius)
+
+            for connection_set in self.bike_bridge.connections:
+                for (point_a, point_b) in connection_set:
+                    px_a = coordinate_to_pixel(point_a, self.draw_size, self.bounds, self.bounding_range)
+                    px_b = coordinate_to_pixel(point_b, self.draw_size, self.bounds, self.bounding_range)
+                    pygame.draw.line(canvas, IV.connector_colour, px_a, px_b, 2)
 
         # Drawing labels for frames
         if self.render_labels:
             for i, (frame, (d_r, p_r, t_r)) in enumerate(zip(self.placed_frames, self.placement_rewards)):
                 points = frame.points
-                j      = [coordinate_to_pixel(p, self.canvas_size, self.bounds, self.bounding_range) for p in points]
+                j      = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in points]
                 t      = IV.frame_thickness
                 pygame.draw.line(canvas, (0, 0, 0), j[0], j[1], t)  # TT
                 pygame.draw.line(canvas, (0, 0, 0), j[1], j[2], t)  # HT
@@ -516,8 +552,8 @@ class BikeBuilder_Env(gym.Env):
                 anchor_world = frame.Centroid
                 label_world  = anchor_world + np.array([0.0, direction * IV.rew_label_offset], dtype=np.float32)
 
-                anchor_px = coordinate_to_pixel(anchor_world, self.canvas_size, self.bounds, self.bounding_range)
-                label_px  = coordinate_to_pixel(label_world,  self.canvas_size, self.bounds, self.bounding_range)
+                anchor_px = coordinate_to_pixel(anchor_world, self.draw_size, self.bounds, self.bounding_range)
+                label_px  = coordinate_to_pixel(label_world,  self.draw_size, self.bounds, self.bounding_range)
 
                 margin   = 60
                 label_px = (
@@ -537,7 +573,7 @@ class BikeBuilder_Env(gym.Env):
             # Draw the bike frames
             for frame in self.placed_frames:
                 points = frame.points
-                j      = [coordinate_to_pixel(p, self.canvas_size, self.bounds, self.bounding_range) for p in points]
+                j      = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in points]
                 t      = IV.frame_thickness
 
                 pygame.draw.line(canvas, (0, 0, 0), j[0], j[1], t)  # TT

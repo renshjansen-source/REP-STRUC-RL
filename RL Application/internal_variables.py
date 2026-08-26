@@ -41,7 +41,7 @@ class InternalVariables:
     overshot_penalty  : float = 0.0
     no_progress       : float = 0.0
     # --- Render  Settings ---
-    window_padding    : float = 0.1
+    window_padding    : int   = 100
     grid_colour       : tuple[int, int, int] = (230, 230, 230)
     label_colour      : tuple[int, int, int] = (150, 150, 150)
     g_curve_colour    : tuple[int, int, int] = (200, 200, 200)
@@ -58,6 +58,11 @@ class InternalVariables:
     label_font_size   : int = 16
     centroid_colour: tuple[int, int, int] = (255, 0, 0)
     centroid_radius: int = 4
+    connector_colour  : tuple[int, int, int] = (0, 150, 150)
+    # ---  FEA  Rendering  ---
+    support_radius : int = 6
+    pin_colour     : tuple[int, int, int] = (186, 130, 230)
+    roller_colour  : tuple[int, int, int] = (98,  0,   150)
     # --- Extractor Layers ---
     guide_curve_out    = 32
     stock_geometry_out = 64

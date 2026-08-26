@@ -9,6 +9,7 @@ from numpy.typing import NDArray
 from enum import Enum
 from internal_variables import IV
 from dataclasses import dataclass, field
+from functools import cached_property
 
 # =============================================================================
 # TYPE ALIASES
@@ -96,7 +97,6 @@ class PointDict(Enum):
     DT_MID = 2  # midpoint(HT_BOTTOM, BB)
     CS_MID = 3  # midpoint(BB, CS_SS)
     SS_MID = 4  # midpoint(CS_SS, ST_TOP)
-
 
 class BikeFrame:
     def __init__(self, points: np.ndarray, recenter: bool = True):
@@ -200,3 +200,102 @@ class BikeFrame:
         x_vector = tangent if mirror_flag else -tangent
 
         return Plane(mid, x_vector, mirror=False) # Temporary revised
+
+class BikeBridge:
+    '''
+    Class to be used for the FEA side of things
+    Connection Log: Target, Candidate, Mirror
+    '''
+    def __init__(self, placed_frames: list[BikeFrame], connection_log: list[tuple[PointDict, PointDict, bool]]):
+        self.placed_frames  = placed_frames
+        self.connection_log = connection_log
+
+    # ─────────────────────────────────────────────────────────────────────
+    # SUPPORTS - simply lowest point of first and last frame.
+    # ─────────────────────────────────────────────────────────────────────
+    @cached_property
+    def pin(self) -> np.ndarray:
+        first_joints = self.placed_frames[0].points
+        lowest_idx   = np.argmin(first_joints[:,1])
+        return first_joints[lowest_idx]
+
+    @cached_property
+    def roller(self) -> np.ndarray:
+        last_joints = self.placed_frames[-1].points
+        lowest_idx  = np.argmin(last_joints[:,1])
+        return last_joints[lowest_idx]
+
+    # ─────────────────────────────────────────────────────────────────────
+    # CONNECTIONS
+    # ─────────────────────────────────────────────────────────────────────
+    @cached_property
+    def connections(self):
+        target_lines    = []
+        candidate_lines = []
+
+        for i, (target, candidate, mirror) in enumerate(self.connection_log):
+            if i == 0:
+                continue   # +++ first frame is not relevant for connections
+
+            target_frame    = self.placed_frames[i - 1]
+            candidate_frame = self.placed_frames[i]
+
+            ta, tb = Pairs[target.value]
+            ca, cb = Pairs[candidate.value]
+
+            target_lines.append((target_frame.points[ta], target_frame.points[tb]))
+            candidate_lines.append((candidate_frame.points[ca], candidate_frame.points[cb]))
+
+        connection_sets = []
+
+        for i, ((target_a, target_b), (candidate_a, candidate_b)) in enumerate(
+            zip(target_lines, candidate_lines), start=1
+        ):
+            target_mirror    = self.connection_log[i - 1][2]
+            candidate_mirror = self.connection_log[i][2]
+
+            if target_mirror != candidate_mirror:
+                connection_sets.append([
+                    [target_a, candidate_a],
+                    [target_b, candidate_b],
+                ])
+            else:
+                connection_sets.append([
+                    [target_a, candidate_b],
+                    [target_b, candidate_a],
+                ])
+
+        long_side  = []
+        short_side = []
+        for connection in connection_sets:
+            [t_a, c_a], [t_b, c_b] = connection
+
+            target_len    = np.linalg.norm(t_b - t_a)
+            candidate_len = np.linalg.norm(c_b - c_a)
+
+            if target_len >= candidate_len:
+                long_side.append([t_a, t_b])
+                short_side.append([c_a, c_b])
+            else:
+                long_side.append([c_a, c_b])
+                short_side.append([t_a, t_b])
+
+        perpendicular_points = []
+        for (long_a, long_b), (short_a, short_b) in zip(long_side, short_side):
+            ab    = long_b - long_a
+            ab_sq = np.dot(ab, ab)
+
+            projected = []
+            for short_pt in (short_a, short_b):
+                t = np.dot(short_pt - long_a, ab) / ab_sq
+                assert 0.0 <= t <= 1.0, (
+                    f"Perpendicular projection fell outside long line segment (t={t:.4f}). "
+                    f"This should be geometrically impossible — check upstream logic."
+                )
+                foot = long_a + t * ab
+                projected.append(foot)
+
+            perpendicular_points.append(projected)
+
+        return connection_sets
+
