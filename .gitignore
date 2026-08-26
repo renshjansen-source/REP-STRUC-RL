@@ -1,6 +1,8 @@
 # --- Project-specific ---
-Internal_Variables.py
 logs/
+logs_backup_1/
+TB_Rename_Tags.py
+log comparison - n_steps and batch_sizes/
 
 # --- Virtual environment ---
 venv/
