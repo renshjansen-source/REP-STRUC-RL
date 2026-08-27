@@ -357,14 +357,12 @@ class BikeBridge:
             candidate_a_id = (candidate_frame_idx, self.corner_index[candidate_frame_idx][ca])
             candidate_b_id = (candidate_frame_idx, self.corner_index[candidate_frame_idx][cb])
 
-            # Recompute which frame's edge is the long one for this connection
             target_frame_obj    = self.placed_frames[target_frame_idx]
             candidate_frame_obj = self.placed_frames[candidate_frame_idx]
             target_len    = np.linalg.norm(target_frame_obj.points[tb]    - target_frame_obj.points[ta])
             candidate_len = np.linalg.norm(candidate_frame_obj.points[cb] - candidate_frame_obj.points[ca])
             target_is_long = target_len >= candidate_len
 
-            # Existing straight/cross mirror pairing
             target_mirror    = self.connection_log[i - 1][2]
             candidate_mirror = self.connection_log[i][2]
 
@@ -375,8 +373,7 @@ class BikeBridge:
                 pair_1 = (target_a_id, candidate_a_id)
                 pair_2 = (target_b_id, candidate_b_id)
 
-            # Reorder each pair to [long_id, short_id], then append the perpendicular point
-            triples = []
+            entries = []
             for target_side_id, candidate_side_id in (pair_1, pair_2):
                 long_id, short_id = (target_side_id, candidate_side_id) if target_is_long \
                                     else (candidate_side_id, target_side_id)
@@ -384,7 +381,6 @@ class BikeBridge:
                 long_frame_idx, long_local_idx = long_id
                 frame_point_count = len(self.points[long_frame_idx])
 
-                # Which corner role (a or b) does the long point hold within its own pair-role?
                 is_a_role = (long_id == target_a_id) or (long_id == candidate_a_id)
 
                 if is_a_role:
@@ -393,9 +389,17 @@ class BikeBridge:
                     perp_local_idx = (long_local_idx - 1) % frame_point_count
 
                 perp_id = (long_frame_idx, perp_local_idx)
-                triples.append([long_id, short_id, perp_id])
 
-            connection_sets.append(triples)
+                long_point  = self.points[long_id[0]][long_id[1]]
+                short_point = self.points[short_id[0]][short_id[1]]
+                end_point_length = np.linalg.norm(long_point - short_point)
+
+                if IV.enable_connection_limit and end_point_length > IV.connection_limit:
+                    entries.append([short_id, perp_id])
+                else:
+                    entries.append([long_id, short_id, perp_id])
+
+            connection_sets.append(entries)
 
         return connection_sets
     
@@ -429,8 +433,13 @@ class BikeBridge:
             for frame_idx, index_list in enumerate(per_frame_indices):
                 tube_index_lists_per_frame[frame_idx].append(index_list)
 
+        deck_min, deck_max = IV.deck_range
+
         valid_candidates = []
         for (frame_idx, local_idx), point in raw_candidates:
+            if not (deck_min <= point[0] <= deck_max):
+                continue # Filters out candidates which exceed the deck_range
+
             ray_origin = point + np.array([0.0, IV.connection_offset / 2.0], dtype=np.float32)
             ray_end    = ray_origin + np.array([0.0, IV.ray_height], dtype=np.float32)
 

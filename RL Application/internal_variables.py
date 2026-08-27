@@ -30,6 +30,10 @@ class InternalVariables:
     termination_vicinity : float = 300.0
     angle_rounding       : int   = 3
     ray_height           : float = 3000.0
+    minimum_connection_distance : float = 20.0 # mm
+    # --- Behavior  Variables ---
+    connection_limit        : float = 200.0
+    enable_connection_limit : bool  = True
     # ---  Reward  Variables  ---
     distance_threshold : float = 500.0
     progress_threshold : float = 1500.0
@@ -65,6 +69,9 @@ class InternalVariables:
     tension_trim   = 10.0         # mm — trim from each end before the intersection check
     tension_count  = 5            # lookahead window when building chords
     tension_thresh = (2, 4000)    # mm — (min, max) allowed chord length
+    # ---  FEA  Variables  ---
+    tributary_width : float = 1.30                      # in metres
+    deck_range      : tuple[float, float] = (0, 8000)   # span of the deck
     # ---  FEA  Rendering  ---
     support_radius : int = 6
     pin_colour     : tuple[int, int, int] = (186, 130, 230)
