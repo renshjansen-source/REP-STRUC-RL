@@ -26,6 +26,7 @@ from environment.envs.BikeBuilder_Utilities import (
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
+from environment.envs.BikeBuilder_FEA import run_fea
 
 # =============================================================================
 # Environment Class
@@ -53,6 +54,7 @@ class BikeBuilder_Env(gym.Env):
             current_frame_sweep       = False,
             shuffle_stock             = True,                     # Added: Now stock can be shuffled
             use_stock_areas           = False,                    # Added: Optional stock area injector
+            enable_fea         : bool = False,
             render_labels             = False,                    # Added: Allows for more extensive rendering
             render_centroids          = False,
             visual_debugging          = False,
@@ -62,6 +64,9 @@ class BikeBuilder_Env(gym.Env):
         # Datasets
         self.guide_curve = guide_curve
         self.frame_stock = frame_stock
+
+        # Enable FEA
+        self.enable_fea  = enable_fea
 
         # Observation Variables
         self.use_stock_areas         = use_stock_areas
@@ -298,6 +303,7 @@ class BikeBuilder_Env(gym.Env):
 
         # FEA initialization
         self.bike_bridge : BikeBridge | None = None
+        self.fea_result  : dict | None       = None
 
         # Initializing stock permutation
         if self.shuffle_stock:
@@ -322,7 +328,7 @@ class BikeBuilder_Env(gym.Env):
         self.grammar.reset()
 
         # Connection log for BikeBridge class
-        self.connection_log: list[tuple[PointDict, PointDict, bool]] = []
+        self.connection_log: list[tuple[int, PointDict, PointDict, bool]] = []
 
         # Initializing sub-rewards
         self.p_reward      = 0
@@ -409,7 +415,7 @@ class BikeBuilder_Env(gym.Env):
                 self.stock_geometry_episode[action[0]]  = 0.0       # Changed: Stock is now zeroed, no stock mask
                 if self.use_stock_areas:
                     self.stock_areas_episode[action[0]] = 0.0
-            self.connection_log.append((target, candidate, mirror))
+            self.connection_log.append((int(raw_idx), target, candidate, mirror))
             self.current_step  += 1
             
             truncated = self.current_step >= self.max_step
@@ -450,7 +456,7 @@ class BikeBuilder_Env(gym.Env):
             self.stock_geometry_episode[action[0]]  = 0.0
             if self.use_stock_areas:
                 self.stock_areas_episode[action[0]] = 0.0
-        self.connection_log.append((target, candidate, mirror))
+        self.connection_log.append((int(raw_idx), target, candidate, mirror))
         self.current_step += 1
 
         # Termination Check
@@ -470,6 +476,14 @@ class BikeBuilder_Env(gym.Env):
             self.bike_bridge = BikeBridge(self.placed_frames, self.connection_log)
             self.load_valid      = self.bike_bridge.load_valid
             self.tension_valid   = self.bike_bridge.tension_valid
+            print(self.load_valid)
+            print(self.tension_valid)
+
+            if self.enable_fea and self.load_valid and self.tension_valid:
+                self.fea_result = run_fea(self.bike_bridge)
+                print(self.fea_result)   # TEMP — remove once FEA output is wired into info/reward
+            else:
+                self.fea_result = None
 
         if self.render_labels:
             self.placement_rewards.append((float(self.d_reward), float(self.p_reward), float(terminal_reward)))

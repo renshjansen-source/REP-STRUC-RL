@@ -228,20 +228,22 @@ class BikeFrame:
 class BikeBridge:
     '''
     Class to be used for the FEA side of things
-    Connection Log: Target, Candidate, Mirror
+    Connection Log: Stock Index, Target, Candidate, Mirror
     '''
-    def __init__(self, placed_frames: list[BikeFrame], connection_log: list[tuple[PointDict, PointDict, bool]]):
+    def __init__(self, placed_frames: list[BikeFrame], connection_log: list[tuple[int, PointDict, PointDict, bool]]):
         self.placed_frames  = placed_frames
         self.connection_log = connection_log
+        self.stock_indices  = [entry[0] for entry in connection_log]
 
-        self.points, self.corner_index = self.build_points()
+        self.points, self.corner_index, self.perpendicular_lookup = self.build_points()
 
     def build_points(self):
         n_frames = len(self.placed_frames)
-        insertions: dict[tuple[int, int], list[tuple[float, np.ndarray]]] = defaultdict(list)
+        insertions: dict[tuple[int, int], list[tuple[float, np.ndarray, int, int]]] = defaultdict(list)
+        perpendicular_lookup: dict[tuple[int, int], tuple[int, int] | None] = {}
 
         for i in range(1, n_frames):
-            target, candidate, _ = self.connection_log[i]
+            _, target, candidate, _ = self.connection_log[i]
 
             target_frame    = self.placed_frames[i - 1]
             candidate_frame = self.placed_frames[i]
@@ -267,14 +269,19 @@ class BikeBridge:
             ab    = long_b - long_a
             ab_sq = np.dot(ab, ab)
 
-            for short_pt in (short_a, short_b):
-                t = np.dot(short_pt - long_a, ab) / ab_sq
-                assert 0.0 <= t <= 1.0, (
-                    f"Perpendicular projection fell outside long edge segment (t={t:.4f}) "
-                    f"on frame {long_frame_idx}, edge {long_edge_id}."
-                )
-                foot = long_a + t * ab
-                insertions[(long_frame_idx, long_edge_id)].append((t, foot))
+            for slot, short_pt in enumerate((short_a, short_b)):
+                raw_t = np.dot(short_pt - long_a, ab) / ab_sq
+                t     = float(np.clip(raw_t, 0.0, 1.0))
+                foot  = long_a + t * ab
+
+                nearer_corner = long_a if t <= 0.5 else long_b
+                distance_to_corner = float(np.linalg.norm(foot - nearer_corner))
+
+                if distance_to_corner < IV.minimum_connection_distance:
+                    perpendicular_lookup[(i, slot)] = None
+                    continue
+
+                insertions[(long_frame_idx, long_edge_id)].append((t, foot, i, slot))
 
         points       : list[list[np.ndarray]] = []
         corner_index : list[list[int]]        = []
@@ -288,14 +295,16 @@ class BikeBridge:
                 frame_points.append(frame.points[corner_id])
 
                 edge_id = corner_id
-                edge_insertions = sorted(insertions.get((frame_idx, edge_id), []), key=lambda pair: pair[0])
-                for _, point in edge_insertions:
+                edge_insertions = sorted(insertions.get((frame_idx, edge_id), []), key=lambda entry: entry[0])
+                for t, point, conn_i, slot in edge_insertions:
+                    local_idx = len(frame_points)
                     frame_points.append(point)
+                    perpendicular_lookup[(conn_i, slot)] = (frame_idx, local_idx)
 
             points.append(frame_points)
             corner_index.append(frame_corner_index)
 
-        return points, corner_index
+        return points, corner_index, perpendicular_lookup
 
     def tube_indices(self, edge_id: int) -> list[list[int]]:
         corner_a, corner_b = Pairs[edge_id]
@@ -344,7 +353,7 @@ class BikeBridge:
         connection_sets = []
 
         for i in range(1, n_frames):
-            target, candidate, _ = self.connection_log[i]
+            _, target, candidate, _ = self.connection_log[i]
 
             target_frame_idx    = i - 1
             candidate_frame_idx = i
@@ -363,8 +372,14 @@ class BikeBridge:
             candidate_len = np.linalg.norm(candidate_frame_obj.points[cb] - candidate_frame_obj.points[ca])
             target_is_long = target_len >= candidate_len
 
-            target_mirror    = self.connection_log[i - 1][2]
-            candidate_mirror = self.connection_log[i][2]
+            # Mirrors build_points' short_a/short_b assignment, so slot identity resolves consistently
+            if target_is_long:
+                short_a_id, short_b_id = candidate_a_id, candidate_b_id
+            else:
+                short_a_id, short_b_id = target_a_id, target_b_id
+
+            target_mirror    = self.connection_log[i - 1][3]
+            candidate_mirror = self.connection_log[i][3]
 
             if target_mirror == candidate_mirror:
                 pair_1 = (target_a_id, candidate_b_id)
@@ -378,21 +393,20 @@ class BikeBridge:
                 long_id, short_id = (target_side_id, candidate_side_id) if target_is_long \
                                     else (candidate_side_id, target_side_id)
 
-                long_frame_idx, long_local_idx = long_id
-                frame_point_count = len(self.points[long_frame_idx])
+                assert short_id == short_a_id or short_id == short_b_id, (
+                    f"short_id {short_id} matches neither short_a_id nor short_b_id "
+                    f"for connection {i} — pairing logic is inconsistent."
+                )
+                slot    = 0 if short_id == short_a_id else 1
+                perp_id = self.perpendicular_lookup.get((i, slot))
 
-                is_a_role = (long_id == target_a_id) or (long_id == candidate_a_id)
+                if perp_id is None:
+                    entries.append([long_id, short_id])
+                    continue
 
-                if is_a_role:
-                    perp_local_idx = (long_local_idx + 1) % frame_point_count
-                else:
-                    perp_local_idx = (long_local_idx - 1) % frame_point_count
-
-                perp_id = (long_frame_idx, perp_local_idx)
-
-                long_point  = self.points[long_id[0]][long_id[1]]
-                short_point = self.points[short_id[0]][short_id[1]]
-                end_point_length = np.linalg.norm(long_point - short_point)
+                long_point        = self.points[long_id[0]][long_id[1]]
+                short_point       = self.points[short_id[0]][short_id[1]]
+                end_point_length  = np.linalg.norm(long_point - short_point)
 
                 if IV.enable_connection_limit and end_point_length > IV.connection_limit:
                     entries.append([short_id, perp_id])

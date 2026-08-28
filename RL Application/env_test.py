@@ -43,20 +43,37 @@ for _, row in bikes_dataframe.iterrows():
 # Action order: [frame_idx, attach_tar, attach_cand, mirror]
 
 mock_actions = [
-    np.array([5,4,1,0]),
-    np.array([6,3,1,0]),
-    np.array([15,4,2,1]),
-    np.array([3,0,1,1]),
-    np.array([2,3,2,1]),
-    np.array([19,0,2,0]),
-    np.array([16,0,0,1]),
-    np.array([7,3,4,1]),
-    np.array([9,1,3,1]),
-    np.array([23,0,3,1]),
-    np.array([0,0,2,1]),
-    np.array([1,0,0,0]),
-    np.array([22,3,2,0]),
+    np.array([6,4,3,1]),
+    np.array([7,1,2,1]),
+    np.array([12,4,4,0]),
+    np.array([21,2,0,0]),
+    np.array([4,2,1,0]),
+    np.array([20,4,0,0]),
+    np.array([16,2,2,1]),
+    np.array([5,4,3,0]),
+    np.array([15,0,4,1]),
+    np.array([11,1,2,0]),
+    np.array([1,4,2,1]),
+    np.array([2,0,3,0]),
+    np.array([3,1,3,0]),
+
 ]
+
+# mock_actions = [
+#     np.array([5,4,1,0]),
+#     np.array([6,3,1,0]),
+#     np.array([15,4,2,1]),
+#     np.array([3,0,1,1]),
+#     np.array([2,3,2,1]),
+#     np.array([19,0,2,0]),
+#     np.array([16,0,0,1]),
+#     np.array([7,3,4,1]),
+#     np.array([9,1,3,1]),
+#     np.array([23,0,3,1]),
+#     np.array([0,0,2,1]),
+#     np.array([1,0,0,0]),
+#     np.array([22,3,2,0]),
+# ]
 
 # =============================================================================
 # GYM CREATION
@@ -76,6 +93,7 @@ env = gym.make(
     enable_termination   = True,
     strict_termination   = False,
     visual_debugging     = True,
+    enable_fea           = True,
 )
 
 env.metadata["render_fps"] = 45

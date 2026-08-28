@@ -6,6 +6,7 @@ from pathlib import Path
 import math
 
 repo_root = Path(__file__).resolve().parent.parent # REP_STRUC RL/
+print(f"internal_variables.py loaded from: {__file__}")
 
 @dataclass(frozen=True)
 class InternalVariables:
@@ -67,11 +68,25 @@ class InternalVariables:
     # ---  FEA pre-flight  ---
     load_divider   : int = 5
     tension_trim   = 10.0         # mm — trim from each end before the intersection check
-    tension_count  = 5            # lookahead window when building chords
+    tension_count  = 4            # lookahead window when building chords
     tension_thresh = (2, 4000)    # mm — (min, max) allowed chord length
     # ---  FEA  Variables  ---
     tributary_width : float = 1.30                      # in metres
-    deck_range      : tuple[float, float] = (0, 8000)   # span of the deck
+    deck_range      : tuple[float, float] = (0, 8000)   # span of the deck in mm
+    connector_OD    : float = 30.0                      # mm
+    connector_thickness : float = 5                     # mm
+    tension_OD      : float = 18.0                      # mm
+    default_load    : float = 7.50                      # kN/m2
+    # ---  FEA  Materials  ---
+    gamma_frames    : float = 78.50                     # kN/m3
+    gamma_connection: float = 78.50                     # kN/m3
+    gamma_cable     : float = 81.31                     # kN/m3
+    E_frame         : float = 21_000.0                  # kN/cm2
+    E_connection    : float = 21_000.0                  # kN/cm2
+    E_cable         : float = 12_700.0                  # kN/cm2
+    G_frames        : float = 8076.0                    # kN/cm2 - inplane and transverse shear modulus
+    G_connection    : float = 8076.0                    # kN/cm2 - inplane and transverse shear modulus
+    G_cables        : float = 4884.0                    # kN/cm2 - inplane and transverse shear modulus
     # ---  FEA  Rendering  ---
     support_radius : int = 6
     pin_colour     : tuple[int, int, int] = (186, 130, 230)

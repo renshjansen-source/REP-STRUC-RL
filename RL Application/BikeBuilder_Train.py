@@ -126,7 +126,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 1_000_000
+total_timesteps       = 200_000
 enable_action_masking = True
 
 policy_kwargs = dict(

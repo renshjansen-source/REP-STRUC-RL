@@ -354,6 +354,17 @@ def check_termination(
             return True, IV.overshot_penalty, overshot
 
     return False, 0.0, overshot
+# =============================================================================
+# FUNCTIONS - RENDERING
+# =============================================================================
+
+def doubled_tube_section(outer_diameter, thickness):
+    # Returns (D_new, t_new) for a single tube whose annulus area equals
+    # 2x the input tube's area, while preserving the same inner diameter.
+    inner_diameter     = outer_diameter - 2.0 * thickness
+    new_outer_diameter = np.sqrt(2.0 * outer_diameter**2 - inner_diameter**2)
+    new_thickness      = (new_outer_diameter - outer_diameter + 2.0 * thickness) / 2.0
+    return new_outer_diameter, new_thickness
 
 # =============================================================================
 # FUNCTIONS - RENDERING
