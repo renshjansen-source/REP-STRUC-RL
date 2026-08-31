@@ -3,6 +3,19 @@ FEA calculation for the terminal evaluation.
 Built against BikeBridge — node identity is ID-based (frame_idx, local_idx),
 not coordinate-based. No manual element splitting: BikeBridge.build_points
 already spliced connector points into each tube's index sequence.
+
+Beam formulation: toggled via IV.enable_timoshenko.
+  True  -> ElasticTimoshenkoBeam (includes shear deformation, E+G+A+Iz+Avy)
+  False -> elasticBeamColumn     (Euler-Bernoulli, no shear term, E+A+Iz)
+Cables remain axial-only Truss elements regardless of this toggle.
+
+Shear correction (Avy) is toggled via IV.enable_adaptive_shear.
+  True  -> Cowper (1966) hollow-circle formula, using v = E/(2G) - 1 per material
+  False -> flat IV.shear_correction_factor * A
+
+Material inputs (E_frame, E_connection, E_cable, G_frames, G_connection)
+are entered in kN/cm², matching Karamba3D's native convention, and
+converted to N/mm² internally. Gravity/self-weight is tabled for now.
 """
 # pyright: reportAttributeAccessIssue=false
 # =============================================================================
@@ -24,6 +37,13 @@ _crs_dataframe['CS_OD'], _crs_dataframe['CS_T'] = doubled_tube_section(_crs_data
 _crs_dataframe['SS_OD'], _crs_dataframe['SS_T'] = doubled_tube_section(_crs_dataframe['SS_OD'], _crs_dataframe['SS_T'])
 
 # =============================================================================
+# UNIT CONVERSION CONSTANTS
+# =============================================================================
+KN_CM2_TO_N_MM2  = 10.0   # material inputs entered in kN/cm² -> N/mm² (used internally throughout this module)
+MM_TO_CM         = 0.1    # output: displacement, mm -> cm
+STRESS_TO_KN_CM2 = 0.1    # output: stress, N/mm² -> kN/cm²
+
+# =============================================================================
 # SECTION PROPERTIES
 # =============================================================================
 def pipe_section(outer_diameter: float, thickness: float) -> tuple[float, float]:
@@ -36,6 +56,25 @@ def pipe_section(outer_diameter: float, thickness: float) -> tuple[float, float]
 def solid_circle_area(diameter: float) -> float:
     # Returns A for a solid circular cross-section, in mm²
     return (math.pi / 4.0) * diameter**2
+
+def shear_area(A: float) -> float:
+    # Effective shear area — flat approximation, IV.shear_correction_factor * A.
+    return IV.shear_correction_factor * A
+
+def poisson_from_E_G(E: float, G: float) -> float:
+    # Derives Poisson's ratio from an isotropic material's E and G.
+    # Unit-agnostic: E and G must share the same unit, but which one doesn't matter (ratio cancels).
+    return E / (2.0 * G) - 1.0
+
+def cowper_hollow_circle_shear_factor(outer_diameter: float, thickness: float, poisson_ratio: float) -> float:
+    # Cowper (1966) shear correction factor for a hollow circular cross-section.
+    # n = inner/outer radius ratio. Reduces to the standard solid-circle formula at n=0.
+    inner_diameter = outer_diameter - 2.0 * thickness
+    n  = inner_diameter / outer_diameter
+    n2 = n * n
+    numerator   = 6.0 * (1.0 + poisson_ratio) * (1.0 + n2)**2
+    denominator = (7.0 + 6.0*poisson_ratio) * (1.0 + n2)**2 + (20.0 + 12.0*poisson_ratio) * n2
+    return numerator / denominator
 
 # =============================================================================
 # NODE REGISTRY
@@ -67,6 +106,8 @@ TUBE_PROPERTIES = {
 # ELEMENT CONSTRUCTION — FRAME TUBES
 # =============================================================================
 def build_frame_elements(bridge, id_to_tag: dict, id_to_xz: dict, elements: list) -> None:
+    poisson_frame = poisson_from_E_G(IV.E_frame, IV.G_frames) if IV.enable_adaptive_shear else None
+
     for property_name, tube_prefix in TUBE_PROPERTIES.items():
         per_frame_indices = getattr(bridge, property_name)
 
@@ -79,14 +120,25 @@ def build_frame_elements(bridge, id_to_tag: dict, id_to_xz: dict, elements: list
             A, Iz = pipe_section(outer_diameter, thickness)
             W = Iz / (outer_diameter / 2.0)
 
-            for k in range(len(index_list) - 1):
-                point_a_id = (frame_idx, index_list[k])
-                point_b_id = (frame_idx, index_list[k + 1])
+            if IV.enable_adaptive_shear:
+                shear_k = cowper_hollow_circle_shear_factor(outer_diameter, thickness, poisson_frame)
+                Avy = shear_k * A
+            else:
+                Avy = shear_area(A)
+
+            if IV.FEA_debug and tube_prefix == "SS":
+                print(f"[SS] frame_idx={frame_idx:>2} stock_idx={stock_idx:>3} "
+                      f"OD={outer_diameter:>8.3f} mm  t={thickness:>7.3f} mm  A={A:>10.3f} mm^2  "
+                      f"Avy={Avy:>10.3f} mm^2 ({'cowper' if IV.enable_adaptive_shear else 'flat'})")
+
+            for i in range(len(index_list) - 1):
+                point_a_id = (frame_idx, index_list[i])
+                point_b_id = (frame_idx, index_list[i + 1])
 
                 node_a = register_node(id_to_tag, id_to_xz, bridge, point_a_id)
                 node_b = register_node(id_to_tag, id_to_xz, bridge, point_b_id)
 
-                elements.append(("beam", "frame", node_a, node_b, A, Iz, W))
+                elements.append(("beam", "frame", node_a, node_b, A, Iz, W, Avy))
 
 # =============================================================================
 # ELEMENT CONSTRUCTION — CONNECTORS
@@ -95,16 +147,27 @@ def build_connector_elements(bridge: BikeBridge, id_to_tag: dict, id_to_xz: dict
     A, Iz = pipe_section(IV.connector_OD, IV.connector_thickness)
     W = Iz / (IV.connector_OD / 2.0)
 
+    if IV.enable_adaptive_shear:
+        poisson_connection = poisson_from_E_G(IV.E_connection, IV.G_connection)
+        shear_k = cowper_hollow_circle_shear_factor(IV.connector_OD, IV.connector_thickness, poisson_connection)
+        Avy = shear_k * A
+    else:
+        Avy = shear_area(A)
+
+    if IV.FEA_debug:
+        print(f"[connector] OD={IV.connector_OD:.2f} t={IV.connector_thickness:.2f} "
+              f"A={A:.3f} mm^2  Avy={Avy:.3f} mm^2 ({'cowper' if IV.enable_adaptive_shear else 'flat'})")
+
     for connection_set in bridge.connections:
         for entry in connection_set:
-            for k in range(len(entry) - 1):
-                point_a_id = entry[k]
-                point_b_id = entry[k + 1]
+            for i in range(len(entry) - 1):
+                point_a_id = entry[i]
+                point_b_id = entry[i + 1]
 
                 node_a = register_node(id_to_tag, id_to_xz, bridge, point_a_id)
                 node_b = register_node(id_to_tag, id_to_xz, bridge, point_b_id)
 
-                elements.append(("beam", "connector", node_a, node_b, A, Iz, W))
+                elements.append(("beam", "connector", node_a, node_b, A, Iz, W, Avy))
 
 # =============================================================================
 # ELEMENT CONSTRUCTION — CABLES
@@ -116,7 +179,8 @@ def build_cable_elements(bridge: BikeBridge, id_to_tag: dict, id_to_xz: dict, el
         node_a = register_node(id_to_tag, id_to_xz, bridge, point_a_id)
         node_b = register_node(id_to_tag, id_to_xz, bridge, point_b_id)
 
-        elements.append(("truss", "cable", node_a, node_b, A, None, None))
+        # Avy is None: trusses are axial-only, shear deformation doesn't apply
+        elements.append(("truss", "cable", node_a, node_b, A, None, None, None))
 
 # =============================================================================
 # SOLVER
@@ -142,12 +206,27 @@ def run_solver(
         ops.node(tag, x, z)
 
     # Cable material — separate elastic modulus, referenced by truss elements
-    ops.uniaxialMaterial('Elastic', CABLE_MATERIAL_TAG, IV.E_Tension)
+    ops.uniaxialMaterial('Elastic', CABLE_MATERIAL_TAG, IV.E_cable * KN_CM2_TO_N_MM2)
+
+    # Per-category E and G, converted once, looked up during element registration
+    E_by_category = {
+        "frame"     : IV.E_frame      * KN_CM2_TO_N_MM2,
+        "connector" : IV.E_connection * KN_CM2_TO_N_MM2,
+    }
+    G_by_category = {
+        "frame"     : IV.G_frames     * KN_CM2_TO_N_MM2,
+        "connector" : IV.G_connection * KN_CM2_TO_N_MM2,
+    }
 
     # Register all elements
-    for eid, (kind, category, node_a, node_b, A, Iz, W) in enumerate(elements, start=1):
+    for eid, (kind, category, node_a, node_b, A, Iz, W, Avy) in enumerate(elements, start=1):
         if kind == "beam":
-            ops.element('elasticBeamColumn', eid, node_a, node_b, A, IV.E_Steel, Iz, 1)
+            E = E_by_category[category]
+            if IV.enable_timoshenko:
+                G = G_by_category[category]
+                ops.element('ElasticTimoshenkoBeam', eid, node_a, node_b, E, G, A, Iz, Avy, 1)
+            else:
+                ops.element('elasticBeamColumn', eid, node_a, node_b, A, E, Iz, 1)
         elif kind == "truss":
             ops.element('Truss', eid, node_a, node_b, A, CABLE_MATERIAL_TAG)
         else:
@@ -193,30 +272,34 @@ def resolve_loads(bridge: BikeBridge, id_to_tag: dict, id_to_xz: dict) -> tuple[
 
     deck_min, deck_max = IV.deck_range
 
-    load_tags   = []
-    load_forces = []
+    load_tags       = []
+    load_forces     = []
+    tributary_spans = []
 
     for i in range(n):
-        left_contrib  = (x_vals[i] - x_vals[i - 1]) / 2.0 if i > 0     else (x_vals[0] - deck_min) / 2.0
-        right_contrib = (x_vals[i + 1] - x_vals[i]) / 2.0 if i < n - 1 else (deck_max - x_vals[-1]) / 2.0
+        left_contrib  = (x_vals[i] - x_vals[i - 1]) / 2.0 if i > 0     else (x_vals[0] - deck_min)
+        right_contrib = (x_vals[i + 1] - x_vals[i]) / 2.0 if i < n - 1 else (deck_max - x_vals[-1])
         tributary_span = left_contrib + right_contrib
+        tributary_spans.append(tributary_span)
 
+        # NOTE: tributary_span is mm, tributary_width is m — deliberately NOT unit-matched.
+        # The mm->m (÷1000) and kN->N (×1000) conversions cancel exactly, so this
+        # multiplication correctly yields Newtons directly. Do not "fix" by adding
+        # a conversion factor here.
         Fz = IV.default_load * tributary_span * IV.tributary_width
 
         tag = register_node(id_to_tag, id_to_xz, bridge, load_points[i])
         load_tags.append(tag)
         load_forces.append(-Fz)
 
+    if IV.FEA_debug:
+        print("\n--- resolve_loads ---")
+        print(f"{'node':>6} {'x [mm]':>12} {'trib span [mm]':>16} {'Fz [N]':>14} {'Fz [kN]':>10}")
+        for i in range(n):
+            print(f"{load_tags[i]:>6} {x_vals[i]:>12.1f} {tributary_spans[i]:>16.1f} {load_forces[i]:>14.2f} {load_forces[i]/1000.0:>10.3f}")
+        print(f"{'total':>6} {'':>12} {'':>16} {sum(load_forces):>14.2f} {sum(load_forces)/1000.0:>10.3f}\n")
+
     return load_tags, load_forces
-
-# =============================================================================
-# OUTPUT UNIT CONVERSION
-# =============================================================================
-MM_TO_CM         = 0.1   # displacement: mm -> cm
-STRESS_TO_KN_CM2 = 0.1   # stress: N/mm² -> kN/cm²
-
-def convert_units(value: float | None, factor: float) -> float | None:
-    return None if value is None else value * factor
 
 # =============================================================================
 # DISPLACEMENT RECOVERY
@@ -236,22 +319,24 @@ def stress_scan(elements: list, category: str) -> tuple[float | None, float | No
     sig_max = None
     sig_min = None
 
-    for eid, (kind, elem_category, node_a, node_b, A, Iz, W) in enumerate(elements, start=1):
+    for eid, (kind, elem_category, node_a, node_b, A, Iz, W, Avy) in enumerate(elements, start=1):
         if elem_category != category:
             continue
 
-        forces = ops.basicForce(eid)
-
         if kind == "beam":
-            N, Mi, Mj = forces
-            candidates = [
-                N / A + Mi / W,
-                N / A - Mi / W,
-                N / A + Mj / W,
-                N / A - Mj / W,
-            ]
+            N1, V1, M1, N2, V2, M2 = ops.eleResponse(eid, 'localForce')
+            N = -N1   # localForce's N1 reports tension as negative (opposite convention to basicForce/N2)
+            if IV.enable_axial_only_stress:
+                candidates = [N / A]
+            else:
+                candidates = [
+                    N / A + M1 / W,
+                    N / A - M1 / W,
+                    N / A + M2 / W,
+                    N / A - M2 / W,
+                ]
         elif kind == "truss":
-            N, = forces
+            N, = ops.basicForce(eid)
             candidates = [N / A]
         else:
             raise ValueError(f"Unknown element kind {kind!r} for eid {eid}")
@@ -265,6 +350,31 @@ def stress_scan(elements: list, category: str) -> tuple[float | None, float | No
     return sig_max, sig_min
 
 # =============================================================================
+# OUTPUT UNIT CONVERSION
+# =============================================================================
+def convert_units(value: float | None, factor: float) -> float | None:
+    return None if value is None else value * factor
+
+# =============================================================================
+# REPORTING
+# =============================================================================
+def print_fea_result(result: dict) -> None:
+    def fmt(value: float | None) -> str:
+        return f"{value:.3f}" if value is not None else "—"
+
+    print("\n=== FEA Result ===")
+    print(f"{'Converged':<18}: {result['converged']}")
+    print(f"{'Max displacement':<18}: {fmt(result['max_displacement'])} cm")
+    print()
+    print(f"{'Category':<12}{'sig_max [kN/cm2]':>20}{'sig_min [kN/cm2]':>20}")
+    print("-" * 52)
+    for label, key in (("Frame", "frame_stress"), ("Connector", "connector_stress"), ("Cable", "cable_stress")):
+        sig_max = fmt(result[key]["sig_max"])
+        sig_min = fmt(result[key]["sig_min"])
+        print(f"{label:<12}{sig_max:>20}{sig_min:>20}")
+    print("=" * 52 + "\n")
+
+# =============================================================================
 # ORCHESTRATOR
 # =============================================================================
 def run_fea(bridge: BikeBridge) -> dict:
@@ -276,8 +386,21 @@ def run_fea(bridge: BikeBridge) -> dict:
     build_connector_elements(bridge, id_to_tag, id_to_xz, elements)
     build_cable_elements(bridge, id_to_tag, id_to_xz, elements)
 
-    pin_tag, roller_tag       = resolve_supports(bridge, id_to_tag, id_to_xz)
-    load_tags, load_forces    = resolve_loads(bridge, id_to_tag, id_to_xz)
+    if IV.FEA_debug:
+        kind_counts     = {}
+        category_counts = {}
+        for kind, category, *_ in elements:
+            kind_counts[kind]         = kind_counts.get(kind, 0) + 1
+            category_counts[category] = category_counts.get(category, 0) + 1
+
+        print("\n--- model size ---")
+        print(f"nodes   : {len(id_to_tag)}")
+        print(f"elements: {len(elements)}  {dict(kind_counts)}  {dict(category_counts)}")
+        print()
+
+
+    pin_tag, roller_tag    = resolve_supports(bridge, id_to_tag, id_to_xz)
+    load_tags, load_forces = resolve_loads(bridge, id_to_tag, id_to_xz)
 
     converged = run_solver(id_to_tag, id_to_xz, elements, pin_tag, roller_tag, load_tags, load_forces)
 

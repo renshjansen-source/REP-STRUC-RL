@@ -26,7 +26,7 @@ from environment.envs.BikeBuilder_Utilities import (
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
-from environment.envs.BikeBuilder_FEA import run_fea
+from environment.envs.BikeBuilder_FEA import run_fea, print_fea_result
 
 # =============================================================================
 # Environment Class
@@ -481,7 +481,7 @@ class BikeBuilder_Env(gym.Env):
 
             if self.enable_fea and self.load_valid and self.tension_valid:
                 self.fea_result = run_fea(self.bike_bridge)
-                print(self.fea_result)   # TEMP — remove once FEA output is wired into info/reward
+                print_fea_result(self.fea_result)
             else:
                 self.fea_result = None
 
