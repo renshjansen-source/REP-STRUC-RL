@@ -22,7 +22,8 @@ from environment.envs.BikeBuilder_Utilities import (
     build_observation_points, 
     build_current_frame_observation,
     build_observation_points_positive,
-    frames_intersect_proximity
+    frames_intersect_proximity,
+    fea_reward,
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
@@ -58,8 +59,10 @@ class BikeBuilder_Env(gym.Env):
             render_labels             = False,                    # Added: Allows for more extensive rendering
             render_centroids          = False,
             visual_debugging          = False,
-            enable_termination : bool = False,          # Added: Enables termination logics
-            strict_termination : bool = False,          # Added: If true, termination only yields rewards if the frame has not exceeded the curve
+            enable_termination : bool    = False,          # Added: Enables termination logics
+            strict_termination : bool    = False,          # Added: If true, termination only yields rewards if the frame has not exceeded the curve
+            full_overshot      : bool    = True,           # Added: Can be used to bypass the final overshot check. 
+            terminal_reward_scale : bool = False,
     ):
         # Datasets
         self.guide_curve = guide_curve
@@ -216,6 +219,8 @@ class BikeBuilder_Env(gym.Env):
         self.true_termination : bool = False
         self.enable_termination = enable_termination
         self.strict_termination = strict_termination
+        self.full_overshot      = full_overshot
+        self.terminal_reward_scale = terminal_reward_scale
 
         self.curve_end  = self.guide_curve[-1]
         end_tangent     = self.guide_curve[-1] - self.guide_curve[-2]
@@ -276,6 +281,19 @@ class BikeBuilder_Env(gym.Env):
         "true_termination" : self.true_termination,
         "load_valid"       : self.load_valid,
         "tension_valid"    : self.tension_valid,
+        "load_valid"       : self.load_valid,
+        "tension_valid"    : self.tension_valid,
+        "deform_r"         : self.deform_r,
+        "tension_r"        : self.tension_r,
+        "compression_r"    : self.compression_r,
+        "fea_max_disp"     : self.fea_max_disp,
+        "frame_sig_max"    : self.frame_sig_max,
+        "frame_sig_min"    : self.frame_sig_min,
+        "connector_sig_max": self.connector_sig_max,
+        "connector_sig_min": self.connector_sig_min,
+        "cable_sig_max"    : self.cable_sig_max,
+        "cable_sig_min"    : self.cable_sig_min,
+        "fea_ran"          : self.fea_ran,
         }
     # ─────────────────────────────────────────────────────────────────────────
     # ACTION MASKING FUNCTION (outdated - i think)
@@ -327,6 +345,23 @@ class BikeBuilder_Env(gym.Env):
         self.tension_valid    = False
         self.grammar.reset()
 
+        # FEA Trackers
+        self.fea_ran          = False
+        self.load_valid       = False
+        self.tension_valid    = False
+
+        self.deform_r      = 0.0
+        self.tension_r     = 0.0
+        self.compression_r = 0.0
+
+        self.fea_max_disp        = None
+        self.frame_sig_max       = None
+        self.frame_sig_min       = None
+        self.connector_sig_max   = None
+        self.connector_sig_min   = None
+        self.cable_sig_max       = None
+        self.cable_sig_min       = None
+
         # Connection log for BikeBridge class
         self.connection_log: list[tuple[int, PointDict, PointDict, bool]] = []
 
@@ -356,6 +391,21 @@ class BikeBuilder_Env(gym.Env):
         self.true_termination = False
         self.load_valid       = False
         self.tension_valid    = False
+
+        # Resetting FEA trackers
+        self.fea_ran          = False
+        self.load_valid       = False
+        self.tension_valid    = False
+        self.deform_r      = 0.0
+        self.tension_r     = 0.0
+        self.compression_r = 0.0
+        self.fea_max_disp        = None
+        self.frame_sig_max       = None
+        self.frame_sig_min       = None
+        self.connector_sig_max   = None
+        self.connector_sig_min   = None
+        self.cable_sig_max       = None
+        self.cable_sig_min       = None
 
         # Setting reuse and ccx flags
         self.reuse_counter = False
@@ -463,10 +513,14 @@ class BikeBuilder_Env(gym.Env):
         if self.enable_termination:
             terminated, terminal_reward, overshot = check_termination(
                 placed_frame, self.curve_end, self.curve_end_tangent,
-                self.current_step, self.max_step, self.strict_termination
+                self.current_step, self.max_step, self.strict_termination,
+                self.full_overshot, self.terminal_reward_scale
             )
             reward        += terminal_reward
-            self.true_termination = terminated == True and overshot == False
+            if self.full_overshot:
+                self.true_termination = terminated == True and overshot == False
+            else:
+                self.true_termination = terminated == True
             self.overshot  = overshot
 
         self.placed_frames.append(placed_frame)
@@ -476,12 +530,25 @@ class BikeBuilder_Env(gym.Env):
             self.bike_bridge = BikeBridge(self.placed_frames, self.connection_log)
             self.load_valid      = self.bike_bridge.load_valid
             self.tension_valid   = self.bike_bridge.tension_valid
-            print(self.load_valid)
-            print(self.tension_valid)
 
             if self.enable_fea and self.load_valid and self.tension_valid:
                 self.fea_result = run_fea(self.bike_bridge)
-                print_fea_result(self.fea_result)
+                # print_fea_result(self.fea_result)
+
+                deform_r, tension_r, compression_r = fea_reward(self.fea_result)
+                fea_total = deform_r + tension_r + compression_r
+                reward += fea_total
+
+                self.fea_ran = True
+
+                # Trackers for logging
+                self.fea_max_disp      = self.fea_result["max_displacement"]
+                self.frame_sig_max     = self.fea_result["frame_stress"]["sig_max"]
+                self.frame_sig_min     = self.fea_result["frame_stress"]["sig_min"]
+                self.connector_sig_max = self.fea_result["connector_stress"]["sig_max"]
+                self.connector_sig_min = self.fea_result["connector_stress"]["sig_min"]
+                self.cable_sig_max     = self.fea_result["cable_stress"]["sig_max"]
+                self.cable_sig_min     = self.fea_result["cable_stress"]["sig_min"]
             else:
                 self.fea_result = None
 

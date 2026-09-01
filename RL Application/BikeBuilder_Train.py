@@ -10,16 +10,13 @@ from datetime import datetime
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util  import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback
-from stable_baselines3.common.vec_env   import SubprocVecEnv
 
 import environment
 from internal_variables import IV
 from BikeBuilder_Seeder import seed_everything
 from environment.envs.BikeBuilder_env_PPO   import BikeBuilder_Env
-from environment.envs.BikeBuilder_Utilities import resample_curve, normalized_cross_sections
+from environment.envs.BikeBuilder_Utilities import resample_curve, normalized_cross_sections, doubled_tube_section
 from environment.envs.BikeBuilder_Classes   import BikeFrame
-from BikeBuilder_Extractor import BikeBuilder_Extractor
-from PointNet_Extractor    import PointNet_Extractor
 from BikeBuilder_Custom_Extractor import Custom_PointNet_Extractor
 from BikeBuilder_Callback  import BikeBuilder_Callback
 from BikeBuilder_Custom_Policy import MaskablePolicy
@@ -56,8 +53,8 @@ crs_dataframe = pd.read_csv(IV.crs_v0)
 crs_dataframe = crs_dataframe * 1000.0
 
 # Doubling CS and SS areas
-crs_dataframe['CS_OD'] = (2 * crs_dataframe['CS_OD']) - crs_dataframe['CS_T']
-crs_dataframe['SS_OD'] = (2 * crs_dataframe['SS_OD']) - crs_dataframe['SS_T']
+crs_dataframe['CS_OD'], crs_dataframe['CS_T'] = doubled_tube_section(crs_dataframe['CS_OD'], crs_dataframe['CS_T'])
+crs_dataframe['SS_OD'], crs_dataframe['SS_T'] = doubled_tube_section(crs_dataframe['SS_OD'], crs_dataframe['SS_T'])
 
 tube_order = ['ST', 'TT', 'HT', 'DT', 'CS', 'SS']
 raw_areas = np.array([
@@ -101,9 +98,11 @@ env_kwargs = dict(
     use_positive_stock_norm = True,
     shuffle_stock           = True,
     current_frame_sweep     = True,
-    use_stock_areas         = False,
     enable_termination      = True,
     strict_termination      = False,
+    use_stock_areas         = True,
+    enable_fea              = True,
+    full_overshot           = True,
     normalization_type      = 'bounding', # 'curve' or 'bounding'
 )
 
@@ -126,13 +125,14 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 200_000
+total_timesteps       = 1_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
     features_extractor_class  = Custom_PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
+    share_features_extractor  = True,
 )
 
 model_kwargs = dict(                          

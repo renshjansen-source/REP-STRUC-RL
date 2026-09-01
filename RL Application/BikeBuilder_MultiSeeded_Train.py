@@ -17,19 +17,20 @@ from BikeBuilder_Seeder import seed_everything
 from environment.envs.BikeBuilder_env_PPO   import BikeBuilder_Env
 from environment.envs.BikeBuilder_Utilities import resample_curve
 from environment.envs.BikeBuilder_Classes   import BikeFrame
-from PointNet_Extractor    import PointNet_Extractor
 from BikeBuilder_Callback  import BikeBuilder_Callback
 from Training_Diary import TrainingDiary
+from BikeBuilder_Custom_Extractor import Custom_PointNet_Extractor
+from BikeBuilder_Custom_Policy import MaskablePolicy
 
 # =============================================================================
 # SWEEP DEFINITION
 # =============================================================================
 CONFIGS = [
-    {"seed": 696551358,  "note": "Seeding sweep with seed 696551358"},
-    {"seed": 994987960,  "note": "Seeding sweep with seed 994987960"},
-    {"seed": 982521492,  "note": "Seeding sweep with seed 982521492"},
-    {"seed": 187368865,  "note": "Seeding sweep with seed 187368865"},
-    {"seed": 124840844,  "note": "Seeding sweep with seed 124840844"},
+    {"seed": 696307358,  "note": "Seeding sweep with seed 696307358"},
+    {"seed": 498302839,  "note": "Seeding sweep with seed 498302839"},
+    {"seed": 687948192,  "note": "Seeding sweep with seed 687948192"},
+    {"seed": 596849485,  "note": "Seeding sweep with seed 596849485"},
+    {"seed": 495803011,  "note": "Seeding sweep with seed 495803011"},
 ]
 
 # =============================================================================
@@ -67,20 +68,31 @@ print(f"Sweep logging to: {sweep_log_dir}")
 # =============================================================================
 # ENVIRONMENT SETUP
 # =============================================================================
+total_timesteps       = 1_000_000
+enable_action_masking = True
+
 policy_kwargs = dict(
-    features_extractor_class  = PointNet_Extractor,
+    features_extractor_class  = Custom_PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
+    use_masking               = enable_action_masking,
 )
 
 env_kwargs = dict(
-    obs_type       = 'angle',
-    current_frame_sweep = True,
-    frame_stock    = frame_stock,
-    guide_curve    = sampled_curve,
-    max_step       = 25,
-    shuffle_stock  = True,
-    use_stock_mask = False,
-    enable_termination = True,
+    obs_type        = 'mid',       # 'combined' | 'edge' | 'mid' | 'angle'
+    stock_mask_mode = 'binary',    # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
+    frame_stock     = frame_stock,
+    guide_curve     = sampled_curve,
+    max_step        = 25,
+    progress_weight = 1.0,
+    distance_weight = 1.0,
+    use_positive_stock_norm = True,
+    shuffle_stock           = True,
+    current_frame_sweep     = True,
+    enable_termination      = True,
+    strict_termination      = False,
+    use_stock_areas         = False,
+    enable_fea              = False,
+    normalization_type      = 'bounding', # 'curve' or 'bounding'
 )
 
 # =============================================================================
@@ -122,10 +134,8 @@ for i, cfg in enumerate(CONFIGS, start=1):
         # ---------------------------------------------------------------------
         # KEYWORD ARGUMENTS
         # ---------------------------------------------------------------------   
-        total_timesteps = 1_000_000
-
         model_kwargs = dict(
-            policy          = "MultiInputPolicy",
+            policy          = MaskablePolicy,
             env             = train_env,
             policy_kwargs   = policy_kwargs,
             n_steps         = 256,

@@ -64,8 +64,23 @@ class BikeBuilder_Callback(BaseCallback):
         self.episode_tally     = 0
         self.overshot_tally    = 0
         self.true_term_tally   = 0
+        self.fea_non_convergence_tally = 0
+
+        # FEA trackers
         self.load_invalid_tally    = 0
         self.tension_invalid_tally = 0
+
+        self.deform_r_values      : list[float] = []
+        self.tension_r_values     : list[float] = []
+        self.compression_r_values : list[float] = []
+
+        self.fea_max_disp_values          : list[float] = []
+        self.frame_tension_values         : list[float] = []
+        self.frame_compression_values     : list[float] = []
+        self.connector_tension_values     : list[float] = []
+        self.connector_compression_values : list[float] = []
+        self.cable_tension_values         : list[float] = []
+        self.cable_compression_values     : list[float] = []
 
     def _log_histogram(self, tag: str, counts: np.ndarray) -> None:
         if self._tb_writer is None or counts.sum() == 0:
@@ -116,6 +131,22 @@ class BikeBuilder_Callback(BaseCallback):
                     if not info.get("tension_valid", False):
                         self.tension_invalid_tally += 1
 
+                    if info.get("fea_ran", False):
+                        self.deform_r_values.append(info["deform_r"])
+                        self.tension_r_values.append(info["tension_r"])
+                        self.compression_r_values.append(info["compression_r"])
+
+                        if info["fea_max_disp"] is not None:
+                            self.fea_max_disp_values.append(info["fea_max_disp"])
+                            self.frame_tension_values.append(info["frame_sig_max"])
+                            self.frame_compression_values.append(info["frame_sig_min"])
+                            self.connector_tension_values.append(info["connector_sig_max"])
+                            self.connector_compression_values.append(info["connector_sig_min"])
+                            self.cable_tension_values.append(info["cable_sig_max"])
+                            self.cable_compression_values.append(info["cable_sig_min"])
+                        else:
+                            self.fea_non_convergence_tally += 1
+
         assert self.grammar is not None
         for action in self.locals["actions"]:
             self.grammar.record(action)
@@ -130,6 +161,13 @@ class BikeBuilder_Callback(BaseCallback):
         # ---    Rewards     ---
         self.logger.record("rewards/distance_step_score_mean", self.distance_sum / self.step_count)
         self.logger.record("rewards/progress_step_score_mean", self.progress_sum / self.step_count)
+
+        if self.deform_r_values:
+            self.logger.record("rewards/deform_step_score_mean", float(np.mean(self.deform_r_values)))
+        if self.tension_r_values:
+            self.logger.record("rewards/tension_step_score_mean", float(np.mean(self.tension_r_values)))
+        if self.compression_r_values:
+            self.logger.record("rewards/compression_step_score_mean", float(np.mean(self.compression_r_values)))
 
         # ---   Penalties    ---
         if self.intersect_pcts:
@@ -159,6 +197,23 @@ class BikeBuilder_Callback(BaseCallback):
         # ---        FEA        ---
         self.logger.record("FEA/load_invalid_tally", self.load_invalid_tally)
         self.logger.record("FEA/tension_invalid_tally", self.tension_invalid_tally)
+
+        if self.fea_max_disp_values:
+            self.logger.record("FEA/max_displacement_mean", float(np.mean(self.fea_max_disp_values)))
+        if self.frame_tension_values:
+            self.logger.record("FEA/frame_tension_mean", float(np.mean(self.frame_tension_values)))
+        if self.frame_compression_values:
+            self.logger.record("FEA/frame_compression_mean", float(np.mean(self.frame_compression_values)))
+        if self.connector_tension_values:
+            self.logger.record("FEA/connector_tension_mean", float(np.mean(self.connector_tension_values)))
+        if self.connector_compression_values:
+            self.logger.record("FEA/connector_compression_mean", float(np.mean(self.connector_compression_values)))
+        if self.cable_tension_values:
+            self.logger.record("FEA/cable_tension_mean", float(np.mean(self.cable_tension_values)))
+        if self.cable_compression_values:
+            self.logger.record("FEA/cable_compression_mean", float(np.mean(self.cable_compression_values)))
+
+        self.logger.record("FEA/non_convergence_tally", self.fea_non_convergence_tally)
         
         # --- Behaviour Metrics ---
         if self.placed_frames_counts:
@@ -177,3 +232,14 @@ class BikeBuilder_Callback(BaseCallback):
         self.max_t_values         = []
         self.finished_episodes   = 0
         self.terminated_episodes = 0
+
+        self.deform_r_values      = []
+        self.tension_r_values     = []
+        self.compression_r_values = []
+        self.fea_max_disp_values          = []
+        self.frame_tension_values         = []
+        self.frame_compression_values     = []
+        self.connector_tension_values     = []
+        self.connector_compression_values = []
+        self.cable_tension_values         = []
+        self.cable_compression_values     = []

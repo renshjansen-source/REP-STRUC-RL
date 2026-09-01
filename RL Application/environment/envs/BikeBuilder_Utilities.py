@@ -13,7 +13,16 @@ from environment.envs.BikeBuilder_Classes import Plane, BikeFrame, PointDict, Pa
 # =============================================================================
 # FUNCTIONS - VECTOR AND POINT MANIPULATION
 # =============================================================================
+def remap(value: float, old_bounds: tuple[float, float], new_bounds: tuple[float, float]) -> float:
+    old_min, old_max = old_bounds
+    new_min, new_max = new_bounds
 
+    t = (value - old_min) / (old_max - old_min)
+    return new_min + t * (new_max - new_min)
+
+# =============================================================================
+# FUNCTIONS - VECTOR AND POINT MANIPULATION
+# =============================================================================
 # CCP = CurveClosestPoint
 def CCP(centroid: Point2D, sampled_curve: np.ndarray) -> tuple[int, np.float32]:
     distances   = np.linalg.norm(sampled_curve - centroid, axis = 1)
@@ -334,26 +343,35 @@ def check_termination(
         current_step       : int,
         max_step           : int,
         strict_termination : bool,
+        full_overshot      : bool,
+        terminal_reward_scale : bool,
     ) -> tuple[bool, float, bool]:
 
     steps_remaining = max_step - current_step
     centroid        = frame.Centroid
 
-    within_vicinity = distance_to(centroid, curve_end) < IV.termination_vicinity
-    overshot        = dot(centroid - curve_end, curve_end_tangent) > 0.0
+    distance        = distance_to(centroid, curve_end)
+    within_vicinity = distance < IV.termination_vicinity
+    is_overshot     = dot(centroid - curve_end, curve_end_tangent) > 0.0
+
+    if terminal_reward_scale:
+        reward = remap(distance, (IV.termination_vicinity, 0), IV.termination_scale)
+    else:
+        reward = IV.termination_step
 
     if strict_termination:
-        if overshot:
-            return True, IV.overshot_penalty, overshot
+        if is_overshot:
+            return True, IV.overshot_penalty, is_overshot
         if within_vicinity:
-            return True, IV.termination_step, overshot
+            return True, reward, is_overshot
     else:
         if within_vicinity:
-            return True, IV.termination_step, overshot
-        if overshot:
-            return True, IV.overshot_penalty, overshot
+            return True, reward, is_overshot
+        if is_overshot and full_overshot:
+            return True, IV.overshot_penalty, is_overshot
+        
 
-    return False, 0.0, overshot
+    return False, 0.0, False
 # =============================================================================
 # FUNCTIONS - RENDERING
 # =============================================================================
@@ -377,3 +395,51 @@ def coordinate_to_pixel(point, window_size, bounds, bounding_range):
 
     return pixel_coordinate
 
+# =============================================================================
+# FUNCTIONS - FEA REWARDS
+# =============================================================================
+
+def exponential_reward(value: float, low: float, high: float, max_reward: float, steepness: float) -> float:
+    assert high > low, f"exponential_reward requires high > low, got low={low}, high={high}"
+
+    if value <= low:
+        return max_reward
+    if value >= high:
+        return 0.0
+
+    t = (value - low) / (high - low)
+    return max_reward * math.exp(-steepness * t)
+
+def fea_reward(fea_result: dict) -> tuple[float, float, float]:
+    max_disp = fea_result["max_displacement"]
+    sig_max  = fea_result["frame_stress"]["sig_max"]
+    sig_min  = fea_result["frame_stress"]["sig_min"]
+
+    deform_low, deform_high           = IV.deform_reward
+    tension_low, tension_high         = IV.tension_reward
+    compression_low, compression_high = IV.compression_reward
+
+    if max_disp is None:
+        deform_r = 0.0
+    else:
+        deform_r = exponential_reward(
+            max_disp, deform_low, deform_high, IV.max_reward_deform, IV.fea_reward_steepness
+        )
+
+    if sig_max is None:
+        tension_r = 0.0
+    else:
+        tension_magnitude = max(0.0, sig_max)   # negative sig_max means no tension present anywhere
+        tension_r = exponential_reward(
+            tension_magnitude, tension_low, tension_high, IV.max_reward_tension, IV.fea_reward_steepness
+        )
+
+    if sig_min is None:
+        compression_r = 0.0
+    else:
+        compression_magnitude = max(0.0, -sig_min)   # positive sig_min means no compression present anywhere
+        compression_r = exponential_reward(
+            compression_magnitude, compression_low, compression_high, IV.max_reward_compression, IV.fea_reward_steepness
+        )
+
+    return deform_r, tension_r, compression_r

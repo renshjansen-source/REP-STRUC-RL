@@ -54,6 +54,10 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         self.use_stock_mask  = "stock_mask"  in observation_space.spaces
         self.use_stock_areas = "stock_areas" in observation_space.spaces
 
+        # Flags for fusion into stock_encoder (only meaningful if the obs exists at all)
+        self.fuse_mask_in_stock  = self.use_stock_mask  and IV.fuse_mask_in_stock
+        self.fuse_areas_in_stock = self.use_stock_areas and IV.fuse_areas_in_stock
+
         # ---------------------------------------------------------------------
         # GUIDE CURVE
         # ---------------------------------------------------------------------
@@ -72,17 +76,19 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         # Retrieve observation space shapes
         stock_shape = observation_space["stock_geometry"].shape
         assert stock_shape is not None
-        if self.use_stock_areas:
+        if self.fuse_areas_in_stock:
             area_space = observation_space["stock_areas"]
             assert area_space.shape is not None
             area_shape = area_space.shape
         else:
             area_shape = None
+
         # Set frame shape
         n_frames, points_per_frame, coords_per_point = stock_shape
+
         # Set shape of area and mask depending on toggle
-        area_in = area_shape[-1] if self.use_stock_areas else 0
-        mask_in = 1 if self.use_stock_mask else 0
+        area_in = area_shape[-1] if self.fuse_areas_in_stock else 0
+        mask_in = 1 if self.fuse_mask_in_stock else 0
 
         # Input of stock encoder
         per_frame_in = points_per_frame * coords_per_point
@@ -233,11 +239,11 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         n_frames = observations["stock_geometry"].shape[1]
         stock_flat_per_frame = observations["stock_geometry"].reshape(batch_size * n_frames, -1)
 
-        if self.use_stock_mask:
+        if self.fuse_mask_in_stock:
             mask_per_frame = observations["stock_mask"].reshape(batch_size * n_frames, 1)
             stock_flat_per_frame = th.cat([stock_flat_per_frame, mask_per_frame], dim=1)
 
-        if self.use_stock_areas:
+        if self.fuse_areas_in_stock:
             area_per_frame = observations["stock_areas"].reshape(batch_size * n_frames, -1)
             stock_flat_per_frame = th.cat([stock_flat_per_frame, area_per_frame], dim=1)
 
@@ -282,18 +288,3 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         parts += [current_feat, progress_feat]
 
         return self.combine_net(th.cat(parts, dim=1))
-
-        
-
-
-
-
-        
-
-
-
-
-
-
-
-

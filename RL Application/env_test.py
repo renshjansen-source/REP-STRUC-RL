@@ -43,37 +43,37 @@ for _, row in bikes_dataframe.iterrows():
 # Action order: [frame_idx, attach_tar, attach_cand, mirror]
 
 # New random Karamba test
-# mock_actions = [
-#     np.array([18,3,3,0]),
-#     np.array([22,1,1,1]),
-#     np.array([0,4,1,1]),
-#     np.array([5,3,1,0]),
-#     np.array([19,4,2,0]),
-#     np.array([2,4,4,0]),
-#     np.array([8,1,4,1]),
-#     np.array([6,2,0,1]),
-#     np.array([1,2,4,0]),
-#     np.array([11,2,0,1]),
-#     np.array([15,2,4,0]),
-#     np.array([24,1,2,0]),
-# ]
+mock_actions = [
+    np.array([18,3,3,0]),
+    np.array([22,1,1,1]),
+    np.array([0,4,1,1]),
+    np.array([5,3,1,0]),
+    np.array([19,4,2,0]),
+    np.array([2,4,4,0]),
+    np.array([8,1,4,1]),
+    np.array([6,2,0,1]),
+    np.array([1,2,4,0]),
+    np.array([11,2,0,1]),
+    np.array([15,2,4,0]),
+    np.array([24,1,2,0]),
+]
 
 # Karamba test 3 - initial optimization
-mock_actions = [
-    np.array([2,4,4,0]),
-    np.array([4,1,1,0]),
-    np.array([6,4,2,1]),
-    np.array([18,0,2,0]),
-    np.array([10,4,2,1]),
-    np.array([3,0,1,1]),
-    np.array([11,3,0,0]),
-    np.array([17,1,4,1]),
-    np.array([7,2,3,0]),
-    np.array([16,1,1,1]),
-    np.array([1,4,0,0]),
-    np.array([12,3,3,0]),
-    np.array([13,0,0,1]),
-]
+# mock_actions = [
+#     np.array([2,4,4,0]),
+#     np.array([4,1,1,0]),
+#     np.array([6,4,2,1]),
+#     np.array([18,0,2,0]),
+#     np.array([10,4,2,1]),
+#     np.array([3,0,1,1]),
+#     np.array([11,3,0,0]),
+#     np.array([17,1,4,1]),
+#     np.array([7,2,3,0]),
+#     np.array([16,1,1,1]),
+#     np.array([1,4,0,0]),
+#     np.array([12,3,3,0]),
+#     np.array([13,0,0,1]),
+# ]
 
 # Karamba Test 2
 # mock_actions = [
