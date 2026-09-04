@@ -10,7 +10,7 @@ from stable_baselines3 import PPO
 
 import environment
 from internal_variables import IV
-from environment.envs.BikeBuilder_Utilities import resample_curve
+from environment.envs.BikeBuilder_Utilities import resample_curve, doubled_tube_section, normalized_cross_sections
 from environment.envs.BikeBuilder_Classes import BikeFrame
 
 # Both extractors need to be importable so PPO.load can resolve whichever one
@@ -22,7 +22,7 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260821_133113/best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260901_160524/best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 5
 DETERMINISTIC = True
 
@@ -49,28 +49,49 @@ for _, row in bikes_dataframe.iterrows():
     ], dtype=np.float32)
     frame_stock.append(BikeFrame(points))
 
+# Loading Bikes - Cross Sectional Areas
+crs_dataframe = pd.read_csv(IV.crs_v0)
+crs_dataframe = crs_dataframe * 1000.0
+
+# Doubling CS and SS areas
+crs_dataframe['CS_OD'], crs_dataframe['CS_T'] = doubled_tube_section(crs_dataframe['CS_OD'], crs_dataframe['CS_T'])
+crs_dataframe['SS_OD'], crs_dataframe['SS_T'] = doubled_tube_section(crs_dataframe['SS_OD'], crs_dataframe['SS_T'])
+
+tube_order = ['ST', 'TT', 'HT', 'DT', 'CS', 'SS']
+raw_areas = np.array([
+    [normalized_cross_sections(float(crs_dataframe.iloc[i][f'{tube}_OD']), float(crs_dataframe.iloc[i][f'{tube}_T']))
+     for tube in tube_order]
+    for i in range(len(crs_dataframe))
+], dtype=np.float32)
+
+area_maxes = raw_areas.max(axis=0) # Migrate this to normalized_cross_sections
+area_maxes[area_maxes == 0] = 1.0
+stock_areas = (raw_areas / area_maxes).astype(np.float32)
+
 # =============================================================================
 # ENVIRONMENT
 # =============================================================================
 env = gym.make(
     "environment/BikeBuilder-v0",
-    obs_type        = 'mid',
-    stock_mask_mode = 'binary',
-    frame_stock        = frame_stock,
-    guide_curve        = sampled_curve,
-    max_step           = 25,
-    progress_weight    = 1.0,
-    distance_weight    = 1.0,
+    obs_type        = 'mid',       # 'combined' | 'edge' | 'mid' | 'angle'
+    stock_mask_mode = 'binary',    # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
+    frame_stock     = frame_stock,
+    guide_curve     = sampled_curve,
+    stock_areas     = stock_areas,
+    max_step        = 25,
+    progress_weight = 1.0,
+    distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
     current_frame_sweep     = True,
-    use_stock_areas         = False,
     enable_termination      = True,
     strict_termination      = False,
-    visual_debugging    = False,
-    normalization_type  = 'bounding',
-    render_mode         = 'human',
-    render_labels       = True,
+    use_stock_areas         = True,
+    enable_fea              = True,
+    full_overshot           = True,
+    normalization_type      = 'bounding', # 'curve' or 'bounding'
+    render_mode             = 'human',
+    render_labels           = True,
 )
 
 env.metadata["render_fps"] = 180

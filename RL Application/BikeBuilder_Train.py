@@ -125,14 +125,14 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 1_000_000
+total_timesteps       = 1_500_000
 enable_action_masking = True
 
 policy_kwargs = dict(
     features_extractor_class  = Custom_PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
-    share_features_extractor  = True,
+    share_features_extractor  = False,
 )
 
 model_kwargs = dict(                          

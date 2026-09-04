@@ -24,6 +24,7 @@ from environment.envs.BikeBuilder_Utilities import (
     build_observation_points_positive,
     frames_intersect_proximity,
     fea_reward,
+    FEA_reward_recip,
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
@@ -281,8 +282,6 @@ class BikeBuilder_Env(gym.Env):
         "true_termination" : self.true_termination,
         "load_valid"       : self.load_valid,
         "tension_valid"    : self.tension_valid,
-        "load_valid"       : self.load_valid,
-        "tension_valid"    : self.tension_valid,
         "deform_r"         : self.deform_r,
         "tension_r"        : self.tension_r,
         "compression_r"    : self.compression_r,
@@ -294,6 +293,7 @@ class BikeBuilder_Env(gym.Env):
         "cable_sig_max"    : self.cable_sig_max,
         "cable_sig_min"    : self.cable_sig_min,
         "fea_ran"          : self.fea_ran,
+        "fea_valid"        : self.fea_valid,
         }
     # ─────────────────────────────────────────────────────────────────────────
     # ACTION MASKING FUNCTION (outdated - i think)
@@ -343,6 +343,7 @@ class BikeBuilder_Env(gym.Env):
         self.true_termination = False
         self.load_valid       = False
         self.tension_valid    = False
+        self.fea_valid        = False
         self.grammar.reset()
 
         # FEA Trackers
@@ -396,6 +397,7 @@ class BikeBuilder_Env(gym.Env):
         self.fea_ran          = False
         self.load_valid       = False
         self.tension_valid    = False
+        self.fea_valid        = False
         self.deform_r      = 0.0
         self.tension_r     = 0.0
         self.compression_r = 0.0
@@ -533,22 +535,25 @@ class BikeBuilder_Env(gym.Env):
 
             if self.enable_fea and self.load_valid and self.tension_valid:
                 self.fea_result = run_fea(self.bike_bridge)
+                self.fea_ran    = True
                 # print_fea_result(self.fea_result)
+                if self.fea_result["converged"] == True:
+                    self.deform_r, self.tension_r, self.compression_r = fea_reward(self.fea_result)
+                    fea_total = self.deform_r + self.tension_r + self.compression_r
+                    reward += fea_total
+                    self.fea_valid = True
 
-                deform_r, tension_r, compression_r = fea_reward(self.fea_result)
-                fea_total = deform_r + tension_r + compression_r
-                reward += fea_total
+                    # Trackers for logging
+                    self.fea_max_disp      = self.fea_result["max_displacement"]
+                    self.frame_sig_max     = self.fea_result["frame_stress"]["sig_max"]
+                    self.frame_sig_min     = self.fea_result["frame_stress"]["sig_min"]
+                    self.connector_sig_max = self.fea_result["connector_stress"]["sig_max"]
+                    self.connector_sig_min = self.fea_result["connector_stress"]["sig_min"]
+                    self.cable_sig_max     = self.fea_result["cable_stress"]["sig_max"]
+                    self.cable_sig_min     = self.fea_result["cable_stress"]["sig_min"]
 
-                self.fea_ran = True
-
-                # Trackers for logging
-                self.fea_max_disp      = self.fea_result["max_displacement"]
-                self.frame_sig_max     = self.fea_result["frame_stress"]["sig_max"]
-                self.frame_sig_min     = self.fea_result["frame_stress"]["sig_min"]
-                self.connector_sig_max = self.fea_result["connector_stress"]["sig_max"]
-                self.connector_sig_min = self.fea_result["connector_stress"]["sig_min"]
-                self.cable_sig_max     = self.fea_result["cable_stress"]["sig_max"]
-                self.cable_sig_min     = self.fea_result["cable_stress"]["sig_min"]
+                else:
+                    self.fea_valid = False
             else:
                 self.fea_result = None
 

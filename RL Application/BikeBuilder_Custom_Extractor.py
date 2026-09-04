@@ -177,15 +177,26 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         # STOCK AREAS (optional)
         # ---------------------------------------------------------------------
         if self.use_stock_areas:
-            stock_areas_in     = flat_shape(observation_space["stock_areas"].shape)
-            stock_areas_hidden = hidden_dim_size(stock_areas_in, IV.stock_areas_out)
-            self.stock_areas_net = nn.Sequential(
-                nn.Linear(stock_areas_in, stock_areas_hidden),
+            area_space = observation_space["stock_areas"]
+            assert area_space.shape is not None
+            n_area_features = area_space.shape[-1]
+
+            area_embed_out = 16
+
+            area_encoder_hidden = hidden_dim_size(n_area_features, area_embed_out)
+            self.stock_areas_encoder = nn.Sequential(
+                nn.Linear(n_area_features, area_encoder_hidden),
                 nn.ReLU(),
-                nn.Linear(stock_areas_hidden, IV.stock_areas_out),
+                nn.Linear(area_encoder_hidden, area_embed_out),
                 nn.ReLU(),
             )
 
+            area_local_dim  = n_frames * area_embed_out
+            area_global_dim = area_embed_out
+            self.stock_areas_combine = nn.Sequential(
+                nn.Linear(area_local_dim + area_global_dim, IV.stock_areas_out),
+                nn.ReLU(),
+            )
         # ---------------------------------------------------------------------
         # PROGRESS + MAX_T (combined)
         # ---------------------------------------------------------------------
@@ -261,8 +272,13 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
             stock_mask_feat = self.stock_mask_net(stock_mask_flat)
 
         if self.use_stock_areas:
-            stock_areas_flat = observations["stock_areas"].reshape(batch_size, -1)
-            stock_areas_feat = self.stock_areas_net(stock_areas_flat)
+            area_flat_per_frame = observations["stock_areas"].reshape(batch_size * n_frames, -1)
+            area_embeddings = self.stock_areas_encoder(area_flat_per_frame)
+            area_embeddings = area_embeddings.reshape(batch_size, n_frames, -1)
+
+            area_local  = area_embeddings.reshape(batch_size, -1)
+            area_global = area_embeddings.max(dim=1).values
+            stock_areas_feat = self.stock_areas_combine(th.cat([area_local, area_global], dim=1))
 
         if self.current_frame_is_sweep:
             n_cf = observations["current_frame"].shape[1]

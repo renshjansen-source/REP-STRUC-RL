@@ -11,7 +11,7 @@ from internal_variables import IV
 from environment.envs.BikeBuilder_Classes import Plane, BikeFrame, PointDict, Pairs, Vector2D, Point2D, ShapeGrammar, cross, dot, segments_intersect
 
 # =============================================================================
-# FUNCTIONS - VECTOR AND POINT MANIPULATION
+# FUNCTIONS - MATHMATICAL FUNCTIONS
 # =============================================================================
 def remap(value: float, old_bounds: tuple[float, float], new_bounds: tuple[float, float]) -> float:
     old_min, old_max = old_bounds
@@ -19,6 +19,9 @@ def remap(value: float, old_bounds: tuple[float, float], new_bounds: tuple[float
 
     t = (value - old_min) / (old_max - old_min)
     return new_min + t * (new_max - new_min)
+
+def recip(value: float):
+    return 1 / (math.sqrt(value))
 
 # =============================================================================
 # FUNCTIONS - VECTOR AND POINT MANIPULATION
@@ -399,6 +402,27 @@ def coordinate_to_pixel(point, window_size, bounds, bounding_range):
 # FUNCTIONS - FEA REWARDS
 # =============================================================================
 
+def FEA_convergence_check(fea_result:dict) -> bool:
+    if fea_result["converged"] == False:
+        return False
+    elif fea_result["max_displacement"] == None:
+        return False
+    elif fea_result["frame_stress"]["sig_max"] == None:
+        return False
+    elif fea_result["frame_stress"]["sig_min"] == None:
+        return False
+    elif fea_result["connector_stress"]["sig_max"] == None:
+        return False
+    elif fea_result["connector_stress"]["sig_min"] == None:
+        return False
+    elif fea_result["cable_stress"]["sig_max"] == None:
+        return False
+    elif fea_result["cable_stress"]["sig_min"] == None:
+        return False
+    else:
+        return True
+
+
 def exponential_reward(value: float, low: float, high: float, max_reward: float, steepness: float) -> float:
     assert high > low, f"exponential_reward requires high > low, got low={low}, high={high}"
 
@@ -443,3 +467,30 @@ def fea_reward(fea_result: dict) -> tuple[float, float, float]:
         )
 
     return deform_r, tension_r, compression_r
+
+def recip_reward(value: float, value_range: tuple[float, float], reward_range: tuple[float, float]) -> float:
+    if value <= value_range[0]:
+        return reward_range[1]
+    if value >= value_range[1]:
+        return reward_range[0]
+
+    bound_0        = recip(value_range[0])
+    bound_1        = recip(value_range[1])
+    adjusted_value = recip(value)
+
+    return remap(adjusted_value, (bound_1, bound_0), reward_range)
+
+def FEA_reward_recip(fea_result: dict) -> tuple[float, float, float]:
+    # retrieve values
+    max_disp = fea_result["max_displacement"]
+    sig_max  = fea_result["frame_stress"]["sig_max"]
+    sig_min  = -fea_result["frame_stress"]["sig_min"]
+
+    # reward calculation
+    disp_reward        = recip_reward(max_disp, IV.deform_reward,      (0, IV.max_reward_deform))
+    tens_reward        = recip_reward(sig_max,  IV.tension_reward,     (0, IV.max_reward_tension))
+    comp_reward        = recip_reward(sig_min,  IV.compression_reward, (0, IV.max_reward_compression))
+
+    total_reward = (disp_reward, tens_reward, comp_reward)
+
+    return total_reward

@@ -409,7 +409,10 @@ def run_fea(bridge: BikeBridge) -> dict:
         connector_max, connector_min = stress_scan(elements, "connector")
         cable_max,     cable_min     = stress_scan(elements, "cable")
         max_disp = max_displacement(id_to_tag)
-    else:
+
+        if any(v is None for v in (frame_max, frame_min, connector_max, connector_min, cable_max, cable_min, max_disp)):
+            converged = False
+    if not converged:
         frame_max = frame_min = connector_max = connector_min = cable_max = cable_min = None
         max_disp = None
 
