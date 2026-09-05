@@ -24,7 +24,7 @@ from environment.envs.BikeBuilder_Utilities import (
     build_observation_points_positive,
     frames_intersect_proximity,
     fea_reward,
-    FEA_reward_recip,
+    fea_reward_recip,
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
@@ -538,7 +538,7 @@ class BikeBuilder_Env(gym.Env):
                 self.fea_ran    = True
                 # print_fea_result(self.fea_result)
                 if self.fea_result["converged"] == True:
-                    self.deform_r, self.tension_r, self.compression_r = fea_reward(self.fea_result)
+                    self.deform_r, self.tension_r, self.compression_r = fea_reward_recip(self.fea_result)
                     fea_total = self.deform_r + self.tension_r + self.compression_r
                     reward += fea_total
                     self.fea_valid = True

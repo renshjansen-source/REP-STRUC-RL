@@ -15,7 +15,7 @@ import environment
 from internal_variables import IV
 from BikeBuilder_Seeder import seed_everything
 from environment.envs.BikeBuilder_env_PPO   import BikeBuilder_Env
-from environment.envs.BikeBuilder_Utilities import resample_curve
+from environment.envs.BikeBuilder_Utilities import resample_curve, doubled_tube_section, normalized_cross_sections
 from environment.envs.BikeBuilder_Classes   import BikeFrame
 from BikeBuilder_Callback  import BikeBuilder_Callback
 from Training_Diary import TrainingDiary
@@ -26,11 +26,11 @@ from BikeBuilder_Custom_Policy import MaskablePolicy
 # SWEEP DEFINITION
 # =============================================================================
 CONFIGS = [
-    {"seed": 696307358,  "note": "Seeding sweep with seed 696307358"},
-    {"seed": 498302839,  "note": "Seeding sweep with seed 498302839"},
-    {"seed": 687948192,  "note": "Seeding sweep with seed 687948192"},
-    {"seed": 596849485,  "note": "Seeding sweep with seed 596849485"},
-    {"seed": 495803011,  "note": "Seeding sweep with seed 495803011"},
+    {"seed": 230923904,  "note": "Seeding sweep with seed 230923904"},
+    {"seed": 453908393,  "note": "Seeding sweep with seed 453908393"},
+    {"seed": 123948430,  "note": "Seeding sweep with seed 123948430"},
+    {"seed": 112233303,  "note": "Seeding sweep with seed 112233303"},
+    {"seed": 432940201,  "note": "Seeding sweep with seed 432940201"},
 ]
 
 # =============================================================================
@@ -54,6 +54,24 @@ for _, row in bikes_dataframe.iterrows():
     ], dtype=np.float32)
     frame_stock.append(BikeFrame(points))
 
+# Loading Bikes - Cross Sectional Areas
+crs_dataframe = pd.read_csv(IV.crs_v0)
+crs_dataframe = crs_dataframe * 1000.0
+
+# Doubling CS and SS areas
+crs_dataframe['CS_OD'], crs_dataframe['CS_T'] = doubled_tube_section(crs_dataframe['CS_OD'], crs_dataframe['CS_T'])
+crs_dataframe['SS_OD'], crs_dataframe['SS_T'] = doubled_tube_section(crs_dataframe['SS_OD'], crs_dataframe['SS_T'])
+
+tube_order = ['ST', 'TT', 'HT', 'DT', 'CS', 'SS']
+raw_areas = np.array([
+    [normalized_cross_sections(float(crs_dataframe.iloc[i][f'{tube}_OD']), float(crs_dataframe.iloc[i][f'{tube}_T']))
+     for tube in tube_order]
+    for i in range(len(crs_dataframe))
+], dtype=np.float32)
+
+area_maxes = raw_areas.max(axis=0) # Migrate this to normalized_cross_sections
+area_maxes[area_maxes == 0] = 1.0
+stock_areas = (raw_areas / area_maxes).astype(np.float32)
 
 # =============================================================================
 # LOGGING SETUP — one parent folder for the whole sweep
@@ -68,13 +86,14 @@ print(f"Sweep logging to: {sweep_log_dir}")
 # =============================================================================
 # ENVIRONMENT SETUP
 # =============================================================================
-total_timesteps       = 1_000_000
+total_timesteps       = 2_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
     features_extractor_class  = Custom_PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
+    share_features_extractor  = False,
 )
 
 env_kwargs = dict(
@@ -82,6 +101,7 @@ env_kwargs = dict(
     stock_mask_mode = 'binary',    # 'binary'   | 'zero_geo' | 'combined_masking' | 'none'
     frame_stock     = frame_stock,
     guide_curve     = sampled_curve,
+    stock_areas     = stock_areas,
     max_step        = 25,
     progress_weight = 1.0,
     distance_weight = 1.0,
@@ -90,8 +110,9 @@ env_kwargs = dict(
     current_frame_sweep     = True,
     enable_termination      = True,
     strict_termination      = False,
-    use_stock_areas         = False,
-    enable_fea              = False,
+    use_stock_areas         = True,
+    enable_fea              = True,
+    full_overshot           = True,
     normalization_type      = 'bounding', # 'curve' or 'bounding'
 )
 
@@ -144,6 +165,7 @@ for i, cfg in enumerate(CONFIGS, start=1):
             tensorboard_log = sweep_log_dir,
             device          = "auto",
             seed            = seed,
+            target_kl       = 0.06,
         )
 
         callback_kwargs = dict(

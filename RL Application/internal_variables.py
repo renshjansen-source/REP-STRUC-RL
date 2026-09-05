@@ -51,9 +51,9 @@ class InternalVariables:
     max_reward_deform      : float = 10.0
     max_reward_tension     : float = 10.0
     max_reward_compression : float = 10.0
-    deform_reward          : tuple[float, float] = (2, 50)      # (low, high), cm
-    tension_reward         : tuple[float, float] = (70, 2000)   # (low, high), kN/cm²
-    compression_reward     : tuple[float, float] = (70, 2000)   # (low, high), kN/cm²
+    deform_reward          : tuple[float, float] = (1, 35)      # (low, high), cm
+    tension_reward         : tuple[float, float] = (50, 1500)   # (low, high), kN/cm²
+    compression_reward     : tuple[float, float] = (50, 1500)   # (low, high), kN/cm²
     fea_reward_steepness   : float = 5.0
     # ---  Penalty Variables  ---
     reuse_penalty     : float = -0.5

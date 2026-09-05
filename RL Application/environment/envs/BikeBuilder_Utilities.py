@@ -402,26 +402,6 @@ def coordinate_to_pixel(point, window_size, bounds, bounding_range):
 # FUNCTIONS - FEA REWARDS
 # =============================================================================
 
-def FEA_convergence_check(fea_result:dict) -> bool:
-    if fea_result["converged"] == False:
-        return False
-    elif fea_result["max_displacement"] == None:
-        return False
-    elif fea_result["frame_stress"]["sig_max"] == None:
-        return False
-    elif fea_result["frame_stress"]["sig_min"] == None:
-        return False
-    elif fea_result["connector_stress"]["sig_max"] == None:
-        return False
-    elif fea_result["connector_stress"]["sig_min"] == None:
-        return False
-    elif fea_result["cable_stress"]["sig_max"] == None:
-        return False
-    elif fea_result["cable_stress"]["sig_min"] == None:
-        return False
-    else:
-        return True
-
 
 def exponential_reward(value: float, low: float, high: float, max_reward: float, steepness: float) -> float:
     assert high > low, f"exponential_reward requires high > low, got low={low}, high={high}"
@@ -480,7 +460,7 @@ def recip_reward(value: float, value_range: tuple[float, float], reward_range: t
 
     return remap(adjusted_value, (bound_1, bound_0), reward_range)
 
-def FEA_reward_recip(fea_result: dict) -> tuple[float, float, float]:
+def fea_reward_recip(fea_result: dict) -> tuple[float, float, float]:
     # retrieve values
     max_disp = fea_result["max_displacement"]
     sig_max  = fea_result["frame_stress"]["sig_max"]
