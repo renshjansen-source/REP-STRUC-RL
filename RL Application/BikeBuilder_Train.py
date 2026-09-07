@@ -125,21 +125,22 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 2_000_000
+total_timesteps       = 6_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
     features_extractor_class  = Custom_PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
-    share_features_extractor  = True,
+    share_features_extractor  = False,
+    net_arch = dict(pi=[128, 128], vf=[128, 128]),
 )
 
 model_kwargs = dict(                          
     policy          = MaskablePolicy,
     env             = train_env,
     policy_kwargs   = policy_kwargs,
-    verbose         = 1,
+    verbose         = 0,
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
@@ -147,7 +148,7 @@ model_kwargs = dict(
     batch_size      = 128,
     ent_coef        = 0.00,
     n_epochs        = 10,
-    target_kl       = 0.06,
+    target_kl       = 0.09,
 )
 
 callback_kwargs = dict(

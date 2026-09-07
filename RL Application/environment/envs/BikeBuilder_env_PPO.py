@@ -64,6 +64,7 @@ class BikeBuilder_Env(gym.Env):
             strict_termination : bool    = False,          # Added: If true, termination only yields rewards if the frame has not exceeded the curve
             full_overshot      : bool    = True,           # Added: Can be used to bypass the final overshot check. 
             terminal_reward_scale : bool = False,
+            print_fea_scores   : bool    = False,
     ):
         # Datasets
         self.guide_curve = guide_curve
@@ -232,6 +233,7 @@ class BikeBuilder_Env(gym.Env):
         self.render_centroids = render_centroids
         self.window_scale     = window_scale
         self.visual_debugging = visual_debugging
+        self.print_fea_scores = print_fea_scores
         # Unpadded drawing size — drives world-to-pixel scale, unchanged from before
         self.draw_size = [x_max // window_scale, z_max // window_scale]
         # Padded canvas — actual pygame Surface size for the drawing area
@@ -536,7 +538,8 @@ class BikeBuilder_Env(gym.Env):
             if self.enable_fea and self.load_valid and self.tension_valid:
                 self.fea_result = run_fea(self.bike_bridge)
                 self.fea_ran    = True
-                # print_fea_result(self.fea_result)
+                if self.print_fea_scores:
+                    print_fea_result(self.fea_result)
                 if self.fea_result["converged"] == True:
                     self.deform_r, self.tension_r, self.compression_r = fea_reward_recip(self.fea_result)
                     fea_total = self.deform_r + self.tension_r + self.compression_r

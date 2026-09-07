@@ -38,6 +38,7 @@ class InternalVariables:
     enable_timoshenko       : bool  = True
     enable_adaptive_shear   : bool  = True 
     enable_axial_only_stress: bool  = False
+    tension_both_ways       : bool  = False
     # --- Debugging Variables ---
     FEA_debug : bool = False
     # ---  Reward  Variables  ---
@@ -48,9 +49,9 @@ class InternalVariables:
     progress_multiplier: float = 1.2
     progress_exponent  : float = 1.0
     # --- FEA Reward Variables ---
-    max_reward_deform      : float = 10.0
-    max_reward_tension     : float = 10.0
-    max_reward_compression : float = 10.0
+    max_reward_deform      : float = 30.0
+    max_reward_tension     : float = 30.0
+    max_reward_compression : float = 30.0
     deform_reward          : tuple[float, float] = (1, 35)      # (low, high), cm
     tension_reward         : tuple[float, float] = (50, 1500)   # (low, high), kN/cm²
     compression_reward     : tuple[float, float] = (50, 1500)   # (low, high), kN/cm²

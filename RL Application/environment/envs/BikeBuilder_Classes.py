@@ -323,6 +323,60 @@ class BikeBridge:
             result.append(indices)
         return result
 
+    def _build_tension_chords(self, candidates):
+        line_out = []
+        i = 0
+        while i < len(candidates):
+            current_id, current_pt = candidates[i]
+            end_idxs = list(range(i + 1, min(i + 1 + IV.tension_count, len(candidates))))
+
+            if not end_idxs:
+                break
+
+            chord_options = []
+            for j in end_idxs:
+                end_id, end_pt = candidates[j]
+                length = float(np.linalg.norm(end_pt - current_pt))
+                chord_options.append((j, end_id, end_pt, length))
+
+            low, high = IV.tension_thresh
+            chord_options = [option for option in chord_options if low <= option[3] <= high]
+
+            if not chord_options:
+                i += 1
+                continue
+
+            valid_options = []
+            for j, end_id, end_pt, length in chord_options:
+                direction     = (end_pt - current_pt) / length
+                trimmed_start = current_pt + IV.tension_trim * direction
+                trimmed_end   = end_pt     - IV.tension_trim * direction
+
+                intersects = False
+                for frame in self.placed_frames:
+                    for corner_a, corner_b in Pairs.values():
+                        if segments_intersect(
+                            trimmed_start, trimmed_end,
+                            frame.points[corner_a], frame.points[corner_b]
+                        ):
+                            intersects = True
+                            break
+                    if intersects:
+                        break
+
+                if not intersects:
+                    valid_options.append((j, end_id, end_pt, length))
+
+            if not valid_options:
+                i += 1
+                continue
+
+            best_j, best_end_id, _, _ = max(valid_options, key=lambda option: option[3])
+            line_out.append((current_id, best_end_id))
+            i = best_j
+
+        return line_out
+    
     @cached_property
     def top_tubes(self) -> list[list[int]]:
         return self.tube_indices(0)
@@ -514,7 +568,7 @@ class BikeBridge:
     @cached_property
     def tension_data(self):
         # Step 1 — one candidate per frame: its lowest (min z) raw corner
-        candidates = []  # list of (id, point) pairs, one per frame
+        candidates = []
         for frame_idx, frame in enumerate(self.placed_frames):
             corner_id = int(np.argmin(frame.points[:, 1]))
             local_idx = self.corner_index[frame_idx][corner_id]
@@ -528,58 +582,21 @@ class BikeBridge:
         if len(candidates) < 2:
             return [], False
 
-        # Step 4 — greedy chord building
-        line_out = []
-        i = 0
-        while i < len(candidates):
-            current_id, current_pt = candidates[i]
-            end_idxs = list(range(i + 1, min(i + 1 + IV.tension_count, len(candidates))))
+        # Step 4 — greedy chord building, forward pass
+        line_out = self._build_tension_chords(candidates)
 
-            if not end_idxs:
-                break
+        # Step 5 — optional reverse pass, deduplicated against the forward pass
+        if IV.tension_both_ways:
+            reverse_chords = self._build_tension_chords(list(reversed(candidates)))
 
-            chord_options = []
-            for j in end_idxs:
-                end_id, end_pt = candidates[j]
-                length = float(np.linalg.norm(end_pt - current_pt))
-                chord_options.append((j, end_id, end_pt, length))
-
-            low, high = IV.tension_thresh
-            chord_options = [option for option in chord_options if low <= option[3] <= high]
-
-            if not chord_options:
-                i += 1
-                continue
-
-            # Intersection filter — trim ends, check against every frame's 5 raw corner-to-corner edges
-            valid_options = []
-            for j, end_id, end_pt, length in chord_options:
-                direction     = (end_pt - current_pt) / length
-                trimmed_start = current_pt + IV.tension_trim * direction
-                trimmed_end   = end_pt     - IV.tension_trim * direction
-
-                intersects = False
-                for frame in self.placed_frames:
-                    for corner_a, corner_b in Pairs.values():
-                        if segments_intersect(
-                            trimmed_start, trimmed_end,
-                            frame.points[corner_a], frame.points[corner_b]
-                        ):
-                            intersects = True
-                            break
-                    if intersects:
-                        break
-
-                if not intersects:
-                    valid_options.append((j, end_id, end_pt, length))
-
-            if not valid_options:
-                i += 1
-                continue
-
-            best_j, best_end_id, _, _ = max(valid_options, key=lambda option: option[3])
-            line_out.append((current_id, best_end_id))
-            i = best_j
+            seen = set()
+            deduplicated = []
+            for id_a, id_b in line_out + reverse_chords:
+                key = frozenset((id_a, id_b))
+                if key not in seen:
+                    seen.add(key)
+                    deduplicated.append((id_a, id_b))
+            line_out = deduplicated
 
         tension_success = len(line_out) > 0
         return line_out, tension_success
