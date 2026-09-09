@@ -125,7 +125,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 500_000
+total_timesteps       = 4_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -133,7 +133,6 @@ policy_kwargs = dict(
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
     share_features_extractor  = False,
-    # net_arch = dict(pi=[128, 128], vf=[128, 128]),
 )
 
 model_kwargs = dict(                          
@@ -149,7 +148,6 @@ model_kwargs = dict(
     ent_coef        = 0.01,
     n_epochs        = 10,
     target_kl       = 0.06,
-    clip_range_vf   = 0.2,
 )
 
 callback_kwargs = dict(
@@ -185,7 +183,7 @@ diary.start(
 # =============================================================================
 eval_callback   = EvalCallback(**callback_kwargs) # type: ignore
 custom_callback = BikeBuilder_Callback()
-model           = PPO(**model_kwargs)             # type: ignore
+model = PPO.load("logs/20260907_224331/best_model/best_model", env=train_env, device="auto")             # type: ignore
 
 # --- Parameter count check ---
 total_params      = sum(p.numel() for p in model.policy.parameters())
