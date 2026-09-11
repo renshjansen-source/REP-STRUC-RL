@@ -22,7 +22,7 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260907_224331/best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260909_171613/best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 5
 DETERMINISTIC = True
 
@@ -94,6 +94,7 @@ env = gym.make(
     render_labels           = True,
     visual_debugging        = True,
     print_fea_scores        = True,
+    reward_debug            = True,
 )
 
 env.metadata["render_fps"] = 180

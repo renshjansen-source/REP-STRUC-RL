@@ -52,10 +52,12 @@ class InternalVariables:
     max_reward_deform      : float = 10.0
     max_reward_tension     : float = 10.0
     max_reward_compression : float = 10.0
-    deform_reward          : tuple[float, float] = (1, 35)      # (low, high), cm
-    tension_reward         : tuple[float, float] = (50, 1500)   # (low, high), kN/cm²
-    compression_reward     : tuple[float, float] = (50, 1500)   # (low, high), kN/cm²
+    deform_reward          : tuple[float, float] = (0.5, 300)      # (low, high), cm
+    tension_reward         : tuple[float, float] = (20, 2500)   # (low, high), kN/cm²
+    compression_reward     : tuple[float, float] = (20, 2500)   # (low, high), kN/cm²
     fea_reward_steepness   : float = 5.0
+    fea_recip_power_deform        : float = 0.010
+    fea_recip_power_fibre         : float = 0.150
     # ---  Penalty Variables  ---
     reuse_penalty     : float = -0.5
     ccx_penalty       : float = -2.0
@@ -111,12 +113,12 @@ class InternalVariables:
     fuse_mask_in_stock  : bool = True
     fuse_areas_in_stock : bool = False
     # ---  Extractor Layers   ---
-    guide_curve_out    = 32
-    stock_geometry_out = 64
-    stock_areas_out    = 24
-    stock_mask_out     = 16
-    current_out        = 16
-    progress_out       = 8
+    guide_curve_out    : int = 32
+    stock_geometry_out : int = 64
+    stock_areas_out    : int = 24
+    stock_mask_out     : int = 16
+    current_out        : int = 32
+    progress_out       : int = 8
     
 
 IV  = InternalVariables()

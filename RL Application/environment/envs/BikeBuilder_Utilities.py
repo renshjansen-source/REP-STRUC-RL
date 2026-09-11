@@ -23,6 +23,9 @@ def remap(value: float, old_bounds: tuple[float, float], new_bounds: tuple[float
 def recip(value: float):
     return 1 / (math.sqrt(value))
 
+def recip_adjustable(value: float, power: float):
+    return 1 / (value ** power)
+
 # =============================================================================
 # FUNCTIONS - VECTOR AND POINT MANIPULATION
 # =============================================================================
@@ -35,7 +38,6 @@ def CCP(centroid: Point2D, sampled_curve: np.ndarray) -> tuple[int, np.float32]:
 # =============================================================================
 # FUNCTIONS - DATA HANDLING
 # =============================================================================
-
 def resample_curve(curve: np.ndarray, samples: int) -> np.ndarray:
     # Cumulative distance along the curve
     deltas = np.diff(curve, axis=0)                             # next point - current point
@@ -59,11 +61,9 @@ def normalized_cross_sections(outer_diameter, thickness):
     
     return cross_section
 
-
 # =============================================================================
 # FUNCTIONS - OPERATIONAL LOGICS
 # =============================================================================
-
 def distance_to(point_a, point_b) -> float:
     return float(np.linalg.norm(point_a - point_b))
 
@@ -198,10 +198,10 @@ def place(
     moved_frame = BikeFrame(moved_points, recenter = False)
 
     return moved_frame
+
 # =============================================================================
 # FUNCTIONS - OBSERVATIONS
 # =============================================================================
-
 def encode_angles(angles: np.ndarray) -> np.ndarray:
     pairs = np.stack([np.cos(angles), np.sin(angles)], axis=-1).astype(np.float32)
     return np.round(pairs, decimals=IV.angle_rounding).astype(np.float32)
@@ -290,7 +290,6 @@ def frames_intersect(frame: BikeFrame, buffer_frames: list[BikeFrame]) -> bool:
 # =============================================================================
 # FUNCTIONS - REWARDS
 # =============================================================================
-
 def distance_reward(nearest_distance: np.float32, distance_weight: float) -> np.float32:
     return distance_weight * (1.0 - (nearest_distance / IV.distance_threshold))
 
@@ -336,9 +335,47 @@ def step_reward(
     return total_reward, new_max_t, d_reward, p_reward
 
 # =============================================================================
+# FUNCTIONS - REWARD DEBUG
+# =============================================================================
+def log_debug_row(debug_log, action, event, reward, penalty=0.0,
+                   progress_reward=0.0, distance_reward=0.0, termination_reward=0.0,
+                   tension_reward=0.0, compression_reward=0.0, deformation_reward=0.0):
+    step_idx = len(debug_log)
+    debug_log.append(dict(
+        step=step_idx, frame=int(action[0]),
+        target=PointDict(action[1]).name, candidate=PointDict(action[2]).name,
+        mirror=bool(action[3]), event=event,
+        penalty=penalty, progress_reward=progress_reward, distance_reward=distance_reward,
+        termination_reward=termination_reward, tension_reward=tension_reward,
+        compression_reward=compression_reward, deformation_reward=deformation_reward,
+        total_reward=reward,
+    ))
+
+def print_debug_report(debug_log):
+    fmt = "{:>4} {:>5} {:>7} {:>9} {:>4} {:>6} | {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} {:>8} | {:>9}"
+    print("\n" + "=" * 118)
+    print("REWARD DEBUG REPORT")
+    print("=" * 118)
+    print(fmt.format("step","frame","target","candidate","mir","event",
+                      "penalty","prog","dist","term","tension","comp","deform","TOTAL"))
+    print("-" * 118)
+    episode_total = 0.0
+    for row in debug_log:
+        r = lambda v: f"{v:.3f}"
+        print(fmt.format(row["step"], row["frame"], row["target"], row["candidate"],
+                          int(row["mirror"]), row["event"],
+                          r(row["penalty"]), r(row["progress_reward"]), r(row["distance_reward"]),
+                          r(row["termination_reward"]), r(row["tension_reward"]),
+                          r(row["compression_reward"]), r(row["deformation_reward"]),
+                          r(row["total_reward"])))
+        episode_total += row["total_reward"]
+    print("-" * 118)
+    print(f"TOTAL EPISODE REWARD: {episode_total:.3f}")
+    print("=" * 118 + "\n")
+    
+# =============================================================================
 # FUNCTIONS - TERMINATION
 # =============================================================================
-
 def check_termination(
         frame              : BikeFrame,
         curve_end          : np.ndarray,
@@ -375,10 +412,10 @@ def check_termination(
         
 
     return False, 0.0, False
+
 # =============================================================================
 # FUNCTIONS - RENDERING
 # =============================================================================
-
 def doubled_tube_section(outer_diameter, thickness):
     # Returns (D_new, t_new) for a single tube whose annulus area equals
     # 2x the input tube's area, while preserving the same inner diameter.
@@ -390,7 +427,6 @@ def doubled_tube_section(outer_diameter, thickness):
 # =============================================================================
 # FUNCTIONS - RENDERING
 # =============================================================================
-
 def coordinate_to_pixel(point, window_size, bounds, bounding_range):
     pixel_x = int((point[0] - bounds["x_min"]) * window_size[0] / bounding_range[0]) + IV.window_padding
     pixel_z = window_size[1] - int((point[1] - bounds["z_min"]) * window_size[1] / bounding_range[1]) + IV.window_padding # Pygame builds the z-axis downwards
@@ -401,8 +437,6 @@ def coordinate_to_pixel(point, window_size, bounds, bounding_range):
 # =============================================================================
 # FUNCTIONS - FEA REWARDS
 # =============================================================================
-
-
 def exponential_reward(value: float, low: float, high: float, max_reward: float, steepness: float) -> float:
     assert high > low, f"exponential_reward requires high > low, got low={low}, high={high}"
 
@@ -448,15 +482,15 @@ def fea_reward(fea_result: dict) -> tuple[float, float, float]:
 
     return deform_r, tension_r, compression_r
 
-def recip_reward(value: float, value_range: tuple[float, float], reward_range: tuple[float, float]) -> float:
+def recip_reward(value: float, value_range: tuple[float, float], reward_range: tuple[float, float], power: float) -> float:
     if value <= value_range[0]:
         return reward_range[1]
     if value >= value_range[1]:
         return reward_range[0]
 
-    bound_0        = recip(value_range[0])
-    bound_1        = recip(value_range[1])
-    adjusted_value = recip(value)
+    bound_0        = recip_adjustable(value_range[0], power)
+    bound_1        = recip_adjustable(value_range[1], power)
+    adjusted_value = recip_adjustable(value, power)
 
     return remap(adjusted_value, (bound_1, bound_0), reward_range)
 
@@ -467,9 +501,9 @@ def fea_reward_recip(fea_result: dict) -> tuple[float, float, float]:
     sig_min  = -fea_result["frame_stress"]["sig_min"]
 
     # reward calculation
-    disp_reward        = recip_reward(max_disp, IV.deform_reward,      (0, IV.max_reward_deform))
-    tens_reward        = recip_reward(sig_max,  IV.tension_reward,     (0, IV.max_reward_tension))
-    comp_reward        = recip_reward(sig_min,  IV.compression_reward, (0, IV.max_reward_compression))
+    disp_reward        = recip_reward(max_disp, IV.deform_reward,      (0, IV.max_reward_deform), IV.fea_recip_power_deform)
+    tens_reward        = recip_reward(sig_max,  IV.tension_reward,     (0, IV.max_reward_tension), IV.fea_recip_power_fibre)
+    comp_reward        = recip_reward(sig_min,  IV.compression_reward, (0, IV.max_reward_compression), IV.fea_recip_power_fibre)
 
     total_reward = (disp_reward, tens_reward, comp_reward)
 

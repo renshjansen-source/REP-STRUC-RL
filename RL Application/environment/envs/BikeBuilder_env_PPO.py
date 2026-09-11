@@ -25,6 +25,8 @@ from environment.envs.BikeBuilder_Utilities import (
     frames_intersect_proximity,
     fea_reward,
     fea_reward_recip,
+    log_debug_row,
+    print_debug_report,
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
@@ -65,13 +67,15 @@ class BikeBuilder_Env(gym.Env):
             full_overshot      : bool    = True,           # Added: Can be used to bypass the final overshot check. 
             terminal_reward_scale : bool = False,
             print_fea_scores   : bool    = False,
+            reward_debug       :bool     = False,
     ):
         # Datasets
         self.guide_curve = guide_curve
         self.frame_stock = frame_stock
 
         # Enable FEA
-        self.enable_fea  = enable_fea
+        self.enable_fea   = enable_fea
+        self.reward_debug = reward_debug
 
         # Observation Variables
         self.use_stock_areas         = use_stock_areas
@@ -297,8 +301,9 @@ class BikeBuilder_Env(gym.Env):
         "fea_ran"          : self.fea_ran,
         "fea_valid"        : self.fea_valid,
         }
+
     # ─────────────────────────────────────────────────────────────────────────
-    # ACTION MASKING FUNCTION (outdated - i think)
+    # ACTION MASKING FUNCTION (outdated)
     # ─────────────────────────────────────────────────────────────────────────
     def action_masks(self) -> np.ndarray:
         return np.concatenate([
@@ -377,6 +382,10 @@ class BikeBuilder_Env(gym.Env):
             self.placement_rewards: list[tuple[float, float, float]] = []
             self.action_log       : list[str]                 = []
 
+        # Reward debug trackers
+        if self.reward_debug:
+            self.debug_log           : list[dict] = []
+
         obs  = self._get_obs()
         info = self._get_info()
         return obs, info
@@ -442,8 +451,14 @@ class BikeBuilder_Env(gym.Env):
             reward              = IV.reuse_penalty
             truncated           = self.current_step >= self.max_step
             self.reuse_counter  = True
+
             if self.render_labels:
                 self.action_log.append(action_code + "-RU") # type: ignore
+
+            if self.reward_debug:
+                log_debug_row(self.debug_log, action, "REUSE", reward, penalty=reward)
+                if truncated:
+                    print_debug_report(self.debug_log)
             
             obs                 = self._get_obs()
             info                = self._get_info()
@@ -473,6 +488,13 @@ class BikeBuilder_Env(gym.Env):
             self.current_step  += 1
             
             truncated = self.current_step >= self.max_step
+
+            if self.reward_debug:
+                log_debug_row(self.debug_log, action, "OK", reward,
+                            progress_reward=float(self.p_reward), distance_reward=float(self.d_reward))
+                if truncated:
+                    print_debug_report(self.debug_log)
+
             obs       = self._get_obs()
             info      = self._get_info()
             return obs, reward, terminated, truncated, info
@@ -491,6 +513,11 @@ class BikeBuilder_Env(gym.Env):
             truncated = self.current_step >= self.max_step        # CLEAR PLACED FRAME?
             if self.render_labels:
                 self.action_log.append(action_code + "-CCX")     # type: ignore
+
+            if self.reward_debug:
+                log_debug_row(self.debug_log, action, "CCX", reward, penalty=reward)
+                if truncated:
+                    print_debug_report(self.debug_log)
 
             obs       = self._get_obs()
             info      = self._get_info()
@@ -569,6 +596,15 @@ class BikeBuilder_Env(gym.Env):
 
         self.terminated = terminated
         truncated       = self.current_step >= self.max_step
+
+        if self.reward_debug:
+            event = "TERM" if terminated else "OK"
+            log_debug_row(self.debug_log, action, event, reward,
+                        progress_reward=float(self.p_reward), distance_reward=float(self.d_reward),
+                        termination_reward=float(terminal_reward), tension_reward=float(self.tension_r),
+                        compression_reward=float(self.compression_r), deformation_reward=float(self.deform_r))
+            if terminated or truncated:
+                print_debug_report(self.debug_log)
         
         obs = self._get_obs()
         info      = self._get_info()

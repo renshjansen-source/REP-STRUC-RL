@@ -203,6 +203,7 @@ env = gym.make(
     visual_debugging     = True,
     enable_fea           = True,
     print_fea_scores     = True,
+    reward_debug         = True,
 )
 
 env.metadata["render_fps"] = 45
