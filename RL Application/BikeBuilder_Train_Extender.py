@@ -125,7 +125,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 5_000_000
+total_timesteps       = 2_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -184,7 +184,7 @@ diary.start(
 # =============================================================================
 eval_callback   = EvalCallback(**callback_kwargs) # type: ignore
 custom_callback = BikeBuilder_Callback()
-model = PPO.load("logs/20260910_134651/best_model/best_model", env=train_env, device="auto")             # type: ignore
+model = PPO.load("logs/20260911_182224/best_model/best_model", env=train_env, device="auto")             # type: ignore
 
 # --- Parameter count check ---
 total_params      = sum(p.numel() for p in model.policy.parameters())

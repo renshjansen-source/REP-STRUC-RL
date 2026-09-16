@@ -38,7 +38,7 @@ class InternalVariables:
     enable_timoshenko       : bool  = True
     enable_adaptive_shear   : bool  = True 
     enable_axial_only_stress: bool  = False
-    tension_both_ways       : bool  = False
+    tension_both_ways       : bool  = True
     # --- Debugging Variables ---
     FEA_debug : bool = False
     # ---  Reward  Variables  ---
@@ -88,7 +88,7 @@ class InternalVariables:
     tension_count  = 4            # lookahead window when building chords
     tension_thresh = (2, 4000)    # mm — (min, max) allowed chord length
     # ---    FEA Variables    ---
-    tributary_width         : float = 1.30                      # in metres
+    tributary_width         : float = 0.50                      # in metres
     deck_range              : tuple[float, float] = (0, 8000)   # span of the deck in mm
     connector_OD            : float = 30.0                      # mm
     connector_thickness     : float = 5                         # mm
@@ -117,7 +117,7 @@ class InternalVariables:
     stock_geometry_out : int = 64
     stock_areas_out    : int = 24
     stock_mask_out     : int = 16
-    current_out        : int = 32
+    current_out        : int = 16
     progress_out       : int = 8
     
 
