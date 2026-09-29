@@ -23,8 +23,8 @@ class InternalVariables:
     z_bounds          : tuple[float, float] = (0, 2000)
     # ---  File Locations  ---
     arch_v0           : Path = repo_root / "Datasets" / "Curves" / "final_arch_short_true_0_v0.csv"
-    frames_v0         : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_25.csv"
-    crs_v0            : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_25_crs.csv"
+    frames_v0         : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_35.csv"
+    crs_v0            : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_35_crs.csv"
     # --- Tolerance Variables ---
     intersect_tol        : float = 1e-3
     intersect_buffer     : int   = 3

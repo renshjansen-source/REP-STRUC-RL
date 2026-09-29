@@ -92,7 +92,7 @@ env_kwargs = dict(
     frame_stock     = frame_stock,
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
-    max_step        = 25,
+    max_step        = 35,
     progress_weight = 1.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
@@ -133,22 +133,23 @@ policy_kwargs = dict(
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
     # share_features_extractor  = False,
-    # net_arch = dict(pi=[128, 128], vf=[128, 128]),
+    # net_arch = dict(pi=[256, 256], vf=[256, 256]),
+    debug_entropy             = False,
 )
 
 model_kwargs = dict(                          
     policy          = MaskablePolicy,
     env             = train_env,
     policy_kwargs   = policy_kwargs,
-    verbose         = 0,
+    verbose         = 1,
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
     n_steps         = 256, # 2048 / 4 environments
     batch_size      = 128,
-    ent_coef        = 0.01,
+    # ent_coef        = 0.01,
     # n_epochs        = 10,
-    target_kl       = 0.06,
+    # target_kl       = 0.06,
     # clip_range_vf   = 0.2,
 )
 

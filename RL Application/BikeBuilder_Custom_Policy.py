@@ -12,9 +12,11 @@ class MaskablePolicy(MultiInputActorCriticPolicy):
 
     _current_obs: dict[str, th.Tensor]
 
-    def __init__(self, *args, use_masking: bool = True, **kwargs):
+    def __init__(self, *args, use_masking: bool = True, debug_entropy: bool = False, **kwargs):
         super().__init__(*args, **kwargs)      # --- unchanged: identical RNG draws to vanilla
-        self.use_masking = use_masking          # +++ NEW: bookkeeping only, no RNG involved
+        self.use_masking   = use_masking          # +++ NEW: bookkeeping only, no RNG involved
+        self.debug_entropy = debug_entropy
+        self._debug_step   = 0
 
     def extract_features(self, obs, features_extractor=None):
         self._current_obs = obs          # type: ignore       # +++ NEW: only line added
@@ -34,6 +36,20 @@ class MaskablePolicy(MultiInputActorCriticPolicy):
         mean_actions = self.action_net(latent_pi)                    # +++ NEW below this line
         mask = self._mask_from_obs(self._current_obs)
         mean_actions = mean_actions.masked_fill(~mask, -1e8)
+
+        if self.debug_entropy:                                    # +++ NEW: entire block gated, no-op when False
+            self._debug_step += 1
+            if self._debug_step % 250 == 0:
+                with th.no_grad():
+                    dims = [mask.shape[1] - 12, 5, 5, 2]  # frame_idx count derived from mask width
+                    splits = th.split(mean_actions, dims, dim=1)
+                    names = ["frame_idx", "attach_tar", "attach_cand", "mirror"]
+                    entropies = [th.distributions.Categorical(logits=l).entropy().mean().item() for l in splits]
+                    total = sum(entropies)
+                    print(f"[step {self._debug_step}] " +
+                          " | ".join(f"{n}: {e:.3f} ({100*e/total:.0f}%)" for n, e in zip(names, entropies)) +
+                          f" | total: {total:.3f}")
+                    
         return self.action_dist.proba_distribution(action_logits=mean_actions)
 
     def _mask_from_obs(self, obs: dict) -> th.Tensor:

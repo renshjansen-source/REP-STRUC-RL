@@ -32,7 +32,7 @@ from environment.envs.BikeBuilder_Classes   import BikeBridge
 # =============================================================================
 # DATA HANDLING
 # =============================================================================
-_crs_dataframe = pd.read_csv(r"C:\Users\rensh\Documents\Master Thesis\REP_STRUC RL\Datasets\Bike Frames\FRAMED_new_set_25_crs.csv") * 1000.0
+_crs_dataframe = pd.read_csv(r"C:\Users\rensh\Documents\Master Thesis\REP_STRUC RL\Datasets\Bike Frames\FRAMED_new_set_35_crs.csv") * 1000.0
 _crs_dataframe['CS_OD'], _crs_dataframe['CS_T'] = doubled_tube_section(_crs_dataframe['CS_OD'], _crs_dataframe['CS_T'])
 _crs_dataframe['SS_OD'], _crs_dataframe['SS_T'] = doubled_tube_section(_crs_dataframe['SS_OD'], _crs_dataframe['SS_T'])
 

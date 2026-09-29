@@ -406,9 +406,9 @@ def check_termination(
             return True, reward, is_overshot
     else:
         if within_vicinity:
-            return True, reward, is_overshot
+            return True, reward, False
         if is_overshot and full_overshot:
-            return True, IV.overshot_penalty, is_overshot
+            return True, IV.overshot_penalty, True
         
 
     return False, 0.0, False
