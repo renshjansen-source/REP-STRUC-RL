@@ -291,7 +291,8 @@ def frames_intersect(frame: BikeFrame, buffer_frames: list[BikeFrame]) -> bool:
 # FUNCTIONS - REWARDS
 # =============================================================================
 def distance_reward(nearest_distance: np.float32, distance_weight: float) -> np.float32:
-    return distance_weight * (1.0 - (nearest_distance / IV.distance_threshold))
+    raw = distance_weight * (1.0 - (nearest_distance / IV.distance_threshold))
+    return np.float32(max(raw, IV.distance_floor))
 
 def progression_reward(
         nearest_idx    : int,

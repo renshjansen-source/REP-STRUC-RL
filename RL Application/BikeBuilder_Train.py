@@ -125,7 +125,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 2_500_000
+total_timesteps       = 5_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -147,7 +147,7 @@ model_kwargs = dict(
     seed            = seed,
     n_steps         = 256, # 2048 / 4 environments
     batch_size      = 128,
-    # ent_coef        = 0.01,
+    ent_coef        = 0.01,
     # n_epochs        = 10,
     # target_kl       = 0.06,
     # clip_range_vf   = 0.2,

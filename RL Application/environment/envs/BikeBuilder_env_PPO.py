@@ -61,6 +61,7 @@ class BikeBuilder_Env(gym.Env):
             enable_fea         : bool = False,
             render_labels             = False,                    # Added: Allows for more extensive rendering
             render_centroids          = False,
+            render_vicinity           = False,
             visual_debugging          = False,
             enable_termination : bool    = False,          # Added: Enables termination logics
             strict_termination : bool    = False,          # Added: If true, termination only yields rewards if the frame has not exceeded the curve
@@ -238,6 +239,7 @@ class BikeBuilder_Env(gym.Env):
         self.window_scale     = window_scale
         self.visual_debugging = visual_debugging
         self.print_fea_scores = print_fea_scores
+        self.render_vicinity  = render_vicinity
         # Unpadded drawing size — drives world-to-pixel scale, unchanged from before
         self.draw_size = [x_max // window_scale, z_max // window_scale]
         # Padded canvas — actual pygame Surface size for the drawing area
@@ -663,7 +665,12 @@ class BikeBuilder_Env(gym.Env):
                 for frame in self.placed_frames:
                     centroid_px = coordinate_to_pixel(frame.Centroid, self.draw_size, self.bounds, self.bounding_range)
                     pygame.draw.circle(canvas, IV.centroid_colour, centroid_px, IV.centroid_radius)
-
+            
+            if self.render_vicinity:
+                center_px = coordinate_to_pixel(self.curve_end, self.draw_size, self.bounds, self.bounding_range)
+                radius_px = int(IV.termination_vicinity * self.draw_size[0] / self.bounding_range[0])
+                pygame.draw.circle(canvas, IV.vicinity_colour, center_px, radius_px, IV.vicinity_width)
+            
             # Drawing labels for frames
             if self.render_labels:
                 for i, (frame, (d_r, p_r, t_r)) in enumerate(zip(self.placed_frames, self.placement_rewards)):
@@ -751,7 +758,7 @@ class BikeBuilder_Env(gym.Env):
         tension_colour   = (218, 165, 32)
         tension_thickness = 2
 
-        debug_print_frame = 8   # set to None to disable, or an int frame index to inspect
+        debug_print_frame = None   # set to None to disable, or an int frame index to inspect
 
         tube_colours = {
             "top_tube"   : (198, 244, 178),

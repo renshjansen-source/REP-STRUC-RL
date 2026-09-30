@@ -43,6 +43,7 @@ class InternalVariables:
     FEA_debug : bool = False
     # ---  Reward  Variables  ---
     distance_threshold : float = 500.0
+    distance_floor     : float = -1.0
     progress_threshold : float = 1500.0
     termination_step   : float = 3.0
     termination_scale  : tuple[float, float] = (3.0, 1.0) # 3.0 if distance to end point curve = 0
@@ -82,6 +83,8 @@ class InternalVariables:
     centroid_colour: tuple[int, int, int] = (255, 0, 0)
     centroid_radius: int = 4
     connector_colour  : tuple[int, int, int] = (0, 150, 150)
+    vicinity_colour   : tuple[int, int, int] = (0, 150, 150)
+    vicinity_width    : int = 2
     # ---   FEA  pre-flight   ---
     load_divider   : int = 5
     tension_trim   = 10.0         # mm — trim from each end before the intersection check
