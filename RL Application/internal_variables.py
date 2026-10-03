@@ -43,7 +43,6 @@ class InternalVariables:
     FEA_debug : bool = False
     # ---  Reward  Variables  ---
     distance_threshold : float = 500.0
-    distance_floor     : float = -1.0
     progress_threshold : float = 1500.0
     termination_step   : float = 3.0
     termination_scale  : tuple[float, float] = (3.0, 1.0) # 3.0 if distance to end point curve = 0
@@ -57,10 +56,11 @@ class InternalVariables:
     tension_reward         : tuple[float, float] = (20, 2500)   # (low, high), kN/cm²
     compression_reward     : tuple[float, float] = (20, 2500)   # (low, high), kN/cm²
     fea_reward_steepness   : float = 5.0
-    fea_recip_power_deform        : float = 0.010
-    fea_recip_power_fibre         : float = 0.150
+    fea_recip_power_deform : float = 0.010
+    fea_recip_power_fibre  : float = 0.150
     # ---  Penalty Variables  ---
     reuse_penalty     : float = -0.5
+    distance_floor    : float = -1.0
     ccx_penalty       : float = -2.0
     overshot_penalty  : float = 0.0
     no_progress       : float = 0.0
@@ -86,10 +86,14 @@ class InternalVariables:
     vicinity_colour   : tuple[int, int, int] = (0, 150, 150)
     vicinity_width    : int = 2
     # ---   FEA  pre-flight   ---
-    load_divider   : int = 5
-    tension_trim   = 10.0         # mm — trim from each end before the intersection check
-    tension_count  = 4            # lookahead window when building chords
-    tension_thresh = (2, 4000)    # mm — (min, max) allowed chord length
+    load_indices     : tuple = (0,1,2,3)
+    load_divider     : int   = 5
+    load_ray_trim    : float = 40.0
+    load_double_ray  : bool  = True
+    load_ray_spacing : float = 25.0         # For double rays
+    tension_trim     : float = 10.0         # mm — trim from each end before the intersection check
+    tension_count    : int   = 4            # lookahead window when building chords
+    tension_thresh   : tuple[float, float] = (2, 4000)    # mm — (min, max) allowed chord length
     # ---    FEA Variables    ---
     tributary_width         : float = 0.50                      # in metres
     deck_range              : tuple[float, float] = (0, 8000)   # span of the deck in mm
@@ -122,6 +126,10 @@ class InternalVariables:
     stock_mask_out     : int = 16
     current_out        : int = 16
     progress_out       : int = 8
+    # ---   PointNet Layers   ---
+    pt_current_out     : int = 16
+    pt_frame_out       : int = 16
+    pt_areas_out       : int = 16
     
 
 IV  = InternalVariables()

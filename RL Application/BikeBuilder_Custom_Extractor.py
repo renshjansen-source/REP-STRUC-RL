@@ -95,7 +95,7 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         stock_encoder_in = per_frame_in + mask_in + area_in
 
         # Output of stock encoder
-        frame_embed_out = 16
+        frame_embed_out = IV.pt_frame_out
 
         # Hidden layer of stock encoder
         stock_encoder_hidden = hidden_dim_size(stock_encoder_in, frame_embed_out)
@@ -145,7 +145,7 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
 
         if self.current_frame_is_sweep:
             n_cf, cf_points_per_frame, cf_coords = current_shape # cf = current_frame
-            cf_embed_out = 16
+            cf_embed_out = IV.pt_current_out
             per_cf_in    = cf_points_per_frame * cf_coords
 
             cf_encoder_hidden = hidden_dim_size(per_cf_in, cf_embed_out)
@@ -181,7 +181,7 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
             assert area_space.shape is not None
             n_area_features = area_space.shape[-1]
 
-            area_embed_out = 16
+            area_embed_out = IV.pt_areas_out
 
             area_encoder_hidden = hidden_dim_size(n_area_features, area_embed_out)
             self.stock_areas_encoder = nn.Sequential(

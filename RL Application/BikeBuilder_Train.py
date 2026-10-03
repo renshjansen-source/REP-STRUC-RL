@@ -133,7 +133,7 @@ policy_kwargs = dict(
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
     # share_features_extractor  = False,
-    # net_arch = dict(pi=[256, 256], vf=[256, 256]),
+    # net_arch = dict(pi=[128, 128], vf=[128, 128]),
     debug_entropy             = False,
 )
 
@@ -141,13 +141,13 @@ model_kwargs = dict(
     policy          = MaskablePolicy,
     env             = train_env,
     policy_kwargs   = policy_kwargs,
-    verbose         = 1,
+    verbose         = 0,
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
     n_steps         = 256, # 2048 / 4 environments
     batch_size      = 128,
-    ent_coef        = 0.01,
+    # ent_coef        = 0.01,
     # n_epochs        = 10,
     # target_kl       = 0.06,
     # clip_range_vf   = 0.2,

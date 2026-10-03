@@ -490,7 +490,7 @@ class BikeBridge:
 
         raw_candidates = []
         for frame_idx in range(n_frames):
-            for corner_id in (0, 3):
+            for corner_id in IV.load_indices:
                 local_idx = self.corner_index[frame_idx][corner_id]
                 point     = self.points[frame_idx][local_idx]
                 raw_candidates.append(((frame_idx, local_idx), point))
@@ -503,25 +503,31 @@ class BikeBridge:
 
         deck_min, deck_max = IV.deck_range
 
+        # Single centred ray, or two rays spaced IV.load_ray_spacing apart
+        x_offsets = (-IV.load_ray_spacing / 2.0, IV.load_ray_spacing / 2.0) if IV.load_double_ray else (0.0,)
+
         valid_candidates = []
         for (frame_idx, local_idx), point in raw_candidates:
             if not (deck_min <= point[0] <= deck_max):
                 continue # Filters out candidates which exceed the deck_range
 
-            ray_origin = point + np.array([0.0, IV.connection_offset / 2.0], dtype=np.float32)
-            ray_end    = ray_origin + np.array([0.0, IV.ray_height], dtype=np.float32)
-
             window_start = max(0, frame_idx - 2)
             window_end   = min(n_frames - 1, frame_idx + 2)
 
             blocked = False
-            for window_frame_idx in range(window_start, window_end + 1):
-                for tube_index_list in tube_index_lists_per_frame[window_frame_idx]:
-                    for k in range(len(tube_index_list) - 1):
-                        seg_a = self.points[window_frame_idx][tube_index_list[k]]
-                        seg_b = self.points[window_frame_idx][tube_index_list[k + 1]]
-                        if segments_intersect(ray_origin, ray_end, seg_a, seg_b):
-                            blocked = True
+            for x_offset in x_offsets:
+                ray_origin = point + np.array([x_offset, IV.load_ray_trim], dtype=np.float32)
+                ray_end    = ray_origin + np.array([0.0, IV.ray_height], dtype=np.float32)
+
+                for window_frame_idx in range(window_start, window_end + 1):
+                    for tube_index_list in tube_index_lists_per_frame[window_frame_idx]:
+                        for k in range(len(tube_index_list) - 1):
+                            seg_a = self.points[window_frame_idx][tube_index_list[k]]
+                            seg_b = self.points[window_frame_idx][tube_index_list[k + 1]]
+                            if segments_intersect(ray_origin, ray_end, seg_a, seg_b):
+                                blocked = True
+                                break
+                        if blocked:
                             break
                     if blocked:
                         break
@@ -554,7 +560,7 @@ class BikeBridge:
             selected.append(valid_candidates[best][0])
 
         return selected, True
-
+    
     @cached_property
     def load_points(self):
         ids, _ = self.load_data

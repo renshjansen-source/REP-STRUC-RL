@@ -49,10 +49,11 @@ class BikeBuilder_Callback(BaseCallback):
         self.ep_steps      = np.zeros(n_envs, dtype=np.int64)
         self.ep_intersects = np.zeros(n_envs, dtype=np.int64)
         self.ep_reuses     = np.zeros(n_envs, dtype=np.int64)
-        self.finished_episodes     = 0
-        self.terminated_episodes   = 0
-        self.placed_frames_counts: list[int]   = []
-        self.max_t_values        : list[float] = []
+        self.finished_episodes        = 0
+        self.terminated_episodes      = 0
+        self.true_terminated_episodes = 0
+        self.placed_frames_counts : list[int]   = []
+        self.max_t_values         : list[float] = []
 
         # Tracking lists for per episode collectors
         self.intersect_pcts : list[float] = []
@@ -125,7 +126,8 @@ class BikeBuilder_Callback(BaseCallback):
                     self.overshot_tally += 1
 
                 if info.get("true_termination", False):
-                    self.true_term_tally += 1
+                    self.true_term_tally          += 1
+                    self.true_terminated_episodes += 1
                     if not info.get("load_valid", False):
                         self.load_invalid_tally += 1
                     if not info.get("tension_valid", False):
@@ -186,6 +188,10 @@ class BikeBuilder_Callback(BaseCallback):
                 "termination/termination_ep_percentage",
                 100.0 * self.terminated_episodes / self.finished_episodes
             )
+            self.logger.record(
+                "termination/true_termination_ep_percentage",
+                100.0 * self.true_terminated_episodes / self.finished_episodes
+            )
         self.logger.record("termination/terminations_per_rollout", self.terminated_episodes)
         self.logger.record("termination/termination_tally", self.termination_tally)
         self.logger.record("termination/truncation_tally",  self.truncation_tally)
@@ -221,9 +227,9 @@ class BikeBuilder_Callback(BaseCallback):
         self.reuse_pcts     = []
         self.placed_frames_counts = []
         self.max_t_values         = []
-        self.finished_episodes   = 0
-        self.terminated_episodes = 0
-
+        self.finished_episodes        = 0
+        self.terminated_episodes      = 0
+        self.true_terminated_episodes = 0
         self.deform_r_values      = []
         self.tension_r_values     = []
         self.compression_r_values = []

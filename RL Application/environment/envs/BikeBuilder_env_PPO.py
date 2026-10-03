@@ -302,6 +302,7 @@ class BikeBuilder_Env(gym.Env):
         "cable_sig_min"    : self.cable_sig_min,
         "fea_ran"          : self.fea_ran,
         "fea_valid"        : self.fea_valid,
+        "is_success"       : self.terminated and not self.overshot,
         }
 
     # ─────────────────────────────────────────────────────────────────────────
