@@ -22,8 +22,8 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20260929_175631/best_model/best_model"   # <- update to the run you want to visualize
-N_EPISODES    = 5
+MODEL_PATH    = "logs/20261005_184556_seeding_sweep/453908393_20261005_205438_best_model/best_model"   # <- update to the run you want to visualize
+N_EPISODES    = 20
 DETERMINISTIC = True
 
 # =============================================================================
@@ -79,7 +79,7 @@ env = gym.make(
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
     max_step        = 35,
-    progress_weight = 1.0,
+    progress_weight = 0.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
@@ -94,7 +94,7 @@ env = gym.make(
     render_labels           = True,
     visual_debugging        = True,
     print_fea_scores        = True,
-    reward_debug            = True,
+    reward_debug            = False,
     render_centroids        = True,
     render_vicinity         = True,
 )

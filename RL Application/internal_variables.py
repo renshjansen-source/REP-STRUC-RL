@@ -86,7 +86,7 @@ class InternalVariables:
     vicinity_colour   : tuple[int, int, int] = (0, 150, 150)
     vicinity_width    : int = 2
     # ---   FEA  pre-flight   ---
-    load_indices     : tuple = (0,1,2,3)
+    load_indices     : tuple = (0,3)
     load_divider     : int   = 5
     load_ray_trim    : float = 40.0
     load_double_ray  : bool  = True
@@ -119,12 +119,13 @@ class InternalVariables:
     # --- Extractor Behaviour ---
     fuse_mask_in_stock  : bool = True
     fuse_areas_in_stock : bool = False
+    CF_sentinel_skip    : bool = True
     # ---  Extractor Layers   ---
     guide_curve_out    : int = 32
     stock_geometry_out : int = 64
-    stock_areas_out    : int = 24
+    stock_areas_out    : int = 64
     stock_mask_out     : int = 16
-    current_out        : int = 16
+    current_out        : int = 64
     progress_out       : int = 8
     # ---   PointNet Layers   ---
     pt_current_out     : int = 16

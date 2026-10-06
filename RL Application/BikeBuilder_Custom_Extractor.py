@@ -58,6 +58,9 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         self.fuse_mask_in_stock  = self.use_stock_mask  and IV.fuse_mask_in_stock
         self.fuse_areas_in_stock = self.use_stock_areas and IV.fuse_areas_in_stock
 
+        # Flag for the skipping of sentinel values in current_frame's max pooling
+        self.cf_sentinel_skip    = IV.CF_sentinel_skip
+
         # ---------------------------------------------------------------------
         # GUIDE CURVE
         # ---------------------------------------------------------------------
@@ -287,7 +290,17 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
             cf_embeddings = cf_embeddings.reshape(batch_size, n_cf, -1)
 
             cf_local  = cf_embeddings.reshape(batch_size, -1)
-            cf_global = cf_embeddings.max(dim=1).values
+
+            # If sentinel values should be skipped
+            if self.cf_sentinel_skip:
+                # Sentinel values are exactly 0, real frames never sum to 0
+                real_mask = observations["current_frame"].abs().sum(dim=(2, 3)) > 0
+
+                # Setting sentinel values to -1.0 so they always lose the max pooling (works as long as encoder ends in ReLu)
+                masked_for_pool = cf_embeddings.masked_fill(~real_mask.unsqueeze(-1), -1.0)
+                cf_global = masked_for_pool.max(dim=1).values
+            else:
+                cf_global = cf_embeddings.max(dim=1).values
             current_feat = self.current_net(th.cat([cf_local, cf_global], dim=1))
         else:
             current_flat = observations["current_frame"].reshape(batch_size, -1)

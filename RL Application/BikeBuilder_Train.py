@@ -93,7 +93,7 @@ env_kwargs = dict(
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
     max_step        = 35,
-    progress_weight = 1.0,
+    progress_weight = 0.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
@@ -125,7 +125,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 5_000_000
+total_timesteps       = 2_500_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -141,7 +141,7 @@ model_kwargs = dict(
     policy          = MaskablePolicy,
     env             = train_env,
     policy_kwargs   = policy_kwargs,
-    verbose         = 0,
+    verbose         = 1,
     tensorboard_log = log_dir,
     device          = "auto",
     seed            = seed,
