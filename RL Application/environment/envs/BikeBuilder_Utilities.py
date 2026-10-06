@@ -261,6 +261,13 @@ def build_observation_points_positive(frame_stock: list, obs_type: str) -> np.nd
 
     return np.array(normalized_stock, dtype=np.float32)
 
+def build_current_areas_observation(connection_log, stock_areas, buffer_size) -> np.ndarray:
+    out     = np.zeros((buffer_size, 6), dtype=np.float32)
+    raw_ids = [entry[0] for entry in connection_log][-buffer_size:]
+    for i, raw_idx in enumerate(reversed(raw_ids)):
+        out[i] = stock_areas[raw_idx]
+    return out
+
 # =============================================================================
 # FUNCTIONS - PENALTIES
 # =============================================================================

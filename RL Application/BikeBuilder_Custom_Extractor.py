@@ -51,11 +51,13 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         super().__init__(observation_space, features_dim)
 
         # Flags for optional observations
-        self.use_stock_mask  = "stock_mask"  in observation_space.spaces
-        self.use_stock_areas = "stock_areas" in observation_space.spaces
+        self.use_stock_mask    = "stock_mask"  in observation_space.spaces
+        self.use_stock_areas   = "stock_areas" in observation_space.spaces
+        self.use_current_areas = "current_areas" in observation_space.spaces
 
         # Flags for fusion into stock_encoder (only meaningful if the obs exists at all)
         self.fuse_mask_in_stock  = self.use_stock_mask  and IV.fuse_mask_in_stock
+        self.fuse_mask_in_areas  = self.use_stock_mask  and IV.fuse_mask_in_areas and self.use_stock_areas
         self.fuse_areas_in_stock = self.use_stock_areas and IV.fuse_areas_in_stock
 
         # Flag for the skipping of sentinel values in current_frame's max pooling
@@ -147,9 +149,10 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         self.current_frame_is_sweep = len(current_shape) == 3 
 
         if self.current_frame_is_sweep:
-            n_cf, cf_points_per_frame, cf_coords = current_shape # cf = current_frame
+            n_cf, cf_points_per_frame, cf_coords = current_shape
             cf_embed_out = IV.pt_current_out
-            per_cf_in    = cf_points_per_frame * cf_coords
+            cf_area_in = observation_space["current_areas"].shape[-1] if self.use_current_areas else 0
+            per_cf_in  = cf_points_per_frame * cf_coords + cf_area_in
 
             cf_encoder_hidden = hidden_dim_size(per_cf_in, cf_embed_out)
             self.current_frame_encoder = nn.Sequential(
@@ -167,6 +170,7 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
             )
 
         else:
+            assert not self.use_current_areas, "current_areas requires current_frame_sweep"
             current_in     = flat_shape(current_shape)
             current_hidden = hidden_dim_size(current_in, IV.current_out)
             self.current_net = nn.Sequential(
@@ -177,18 +181,22 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
             )
 
         # ---------------------------------------------------------------------
-        # STOCK AREAS (optional)
+        # STOCK AREAS
         # ---------------------------------------------------------------------
         if self.use_stock_areas:
             area_space = observation_space["stock_areas"]
             assert area_space.shape is not None
             n_area_features = area_space.shape[-1]
 
+            # For fusing the mask into the areas
+            area_mask_in    = 1 if self.fuse_mask_in_areas else 0
+            areas_encoder_in = n_area_features + area_mask_in
+
             area_embed_out = IV.pt_areas_out
 
-            area_encoder_hidden = hidden_dim_size(n_area_features, area_embed_out)
+            area_encoder_hidden = hidden_dim_size(areas_encoder_in, area_embed_out)
             self.stock_areas_encoder = nn.Sequential(
-                nn.Linear(n_area_features, area_encoder_hidden),
+                nn.Linear(areas_encoder_in, area_encoder_hidden),
                 nn.ReLU(),
                 nn.Linear(area_encoder_hidden, area_embed_out),
                 nn.ReLU(),
@@ -253,8 +261,10 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         n_frames = observations["stock_geometry"].shape[1]
         stock_flat_per_frame = observations["stock_geometry"].reshape(batch_size * n_frames, -1)
 
-        if self.fuse_mask_in_stock:
+        if self.fuse_mask_in_stock or self.fuse_mask_in_areas:
             mask_per_frame = observations["stock_mask"].reshape(batch_size * n_frames, 1)
+
+        if self.fuse_mask_in_stock:
             stock_flat_per_frame = th.cat([stock_flat_per_frame, mask_per_frame], dim=1)
 
         if self.fuse_areas_in_stock:
@@ -276,6 +286,10 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
 
         if self.use_stock_areas:
             area_flat_per_frame = observations["stock_areas"].reshape(batch_size * n_frames, -1)
+
+            if self.fuse_mask_in_areas:
+                area_flat_per_frame = th.cat([area_flat_per_frame, mask_per_frame], dim=1)
+
             area_embeddings = self.stock_areas_encoder(area_flat_per_frame)
             area_embeddings = area_embeddings.reshape(batch_size, n_frames, -1)
 
@@ -286,6 +300,10 @@ class Custom_PointNet_Extractor(BaseFeaturesExtractor):
         if self.current_frame_is_sweep:
             n_cf = observations["current_frame"].shape[1]
             current_flat_per_frame = observations["current_frame"].reshape(batch_size * n_cf, -1)
+            if self.use_current_areas:
+                cf_areas_per_frame = observations["current_areas"].reshape(batch_size * n_cf, -1)
+                current_flat_per_frame = th.cat([current_flat_per_frame, cf_areas_per_frame], dim=1)
+                
             cf_embeddings = self.current_frame_encoder(current_flat_per_frame)
             cf_embeddings = cf_embeddings.reshape(batch_size, n_cf, -1)
 

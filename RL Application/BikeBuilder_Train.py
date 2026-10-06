@@ -98,6 +98,7 @@ env_kwargs = dict(
     use_positive_stock_norm = True,
     shuffle_stock           = True,
     current_frame_sweep     = True,
+    current_frame_areas     = True,
     enable_termination      = True,
     strict_termination      = False,
     use_stock_areas         = True,

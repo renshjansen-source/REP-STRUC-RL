@@ -27,6 +27,7 @@ from environment.envs.BikeBuilder_Utilities import (
     fea_reward_recip,
     log_debug_row,
     print_debug_report,
+    build_current_areas_observation,
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
@@ -56,6 +57,7 @@ class BikeBuilder_Env(gym.Env):
             normalization_type  = 'curve',              # 'curve' or 'bounding'
             use_positive_stock_norm   = False,
             current_frame_sweep       = False,
+            current_frame_areas       = False,
             shuffle_stock             = True,                     # Added: Now stock can be shuffled
             use_stock_areas           = False,                    # Added: Optional stock area injector
             enable_fea         : bool = False,
@@ -88,6 +90,15 @@ class BikeBuilder_Env(gym.Env):
         self.normalization_type      = normalization_type
         self.use_positive_stock_norm = use_positive_stock_norm
 
+        self.current_frame_areas = current_frame_areas
+
+        if self.current_frame_areas:
+            if not self.current_frame_sweep:
+                raise ValueError("current_frame_areas requires current_frame_sweep=True")
+            if self.stock_areas is None:
+                raise ValueError("current_frame_areas requires stock_areas to be passed")
+
+            
         # Stock masking Variables
         valid_modes = ("binary", "zero_geo", "combined_masking", "none")
         if stock_mask_mode not in valid_modes:
@@ -192,6 +203,11 @@ class BikeBuilder_Env(gym.Env):
                 low=0.0, high=1.0, shape=(len(self.frame_stock), 6), dtype=np.float32
             )
 
+        if self.current_frame_areas:
+            obs_dict["current_areas"] = spaces.Box(
+                low=0.0, high=1.0, shape=(self.buffer_size, 6), dtype=np.float32            # type: ignore
+            )
+
         self.observation_space = spaces.Dict(obs_dict)
 
         # Normalization
@@ -273,6 +289,10 @@ class BikeBuilder_Env(gym.Env):
             obs["stock_mask"] = self.stock_mask
         if self.use_stock_areas:
             obs["stock_areas"] = self.stock_areas_episode
+        if self.current_frame_areas:
+            obs["current_areas"] = build_current_areas_observation(
+                self.connection_log, self.stock_areas, self.buffer_size
+            )
         
         return obs
 

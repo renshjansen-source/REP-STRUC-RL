@@ -59,7 +59,7 @@ class InternalVariables:
     fea_recip_power_deform : float = 0.010
     fea_recip_power_fibre  : float = 0.150
     # ---  Penalty Variables  ---
-    reuse_penalty     : float = -0.5
+    reuse_penalty     : float = -2.0
     distance_floor    : float = -1.0
     ccx_penalty       : float = -2.0
     overshot_penalty  : float = 0.0
@@ -118,6 +118,7 @@ class InternalVariables:
     roller_colour  : tuple[int, int, int] = (98,  0,   150)
     # --- Extractor Behaviour ---
     fuse_mask_in_stock  : bool = True
+    fuse_mask_in_areas  : bool = True
     fuse_areas_in_stock : bool = False
     CF_sentinel_skip    : bool = True
     # ---  Extractor Layers   ---
