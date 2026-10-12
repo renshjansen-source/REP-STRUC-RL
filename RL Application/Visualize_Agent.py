@@ -10,7 +10,7 @@ from stable_baselines3 import PPO
 
 import environment
 from internal_variables import IV
-from environment.envs.BikeBuilder_Utilities import resample_curve, doubled_tube_section, normalized_cross_sections
+from environment.envs.BikeBuilder_Utilities import resample_curve, doubled_tube_section, normalized_cross_sections, normalize_stock_areas
 from environment.envs.BikeBuilder_Classes import BikeFrame
 
 # Both extractors need to be importable so PPO.load can resolve whichever one
@@ -22,7 +22,7 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20261005_184556_seeding_sweep/453908393_20261005_205438_best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20261011_150226/best_model/best_model"   # <- update to the run you want to visualize
 N_EPISODES    = 20
 DETERMINISTIC = True
 
@@ -64,10 +64,7 @@ raw_areas = np.array([
     for i in range(len(crs_dataframe))
 ], dtype=np.float32)
 
-area_maxes = raw_areas.max(axis=0) # Migrate this to normalized_cross_sections
-area_maxes[area_maxes == 0] = 1.0
-stock_areas = (raw_areas / area_maxes).astype(np.float32)
-
+stock_areas = normalize_stock_areas(raw_areas)
 # =============================================================================
 # ENVIRONMENT
 # =============================================================================
@@ -79,11 +76,12 @@ env = gym.make(
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
     max_step        = 35,
-    progress_weight = 0.0,
+    progress_weight = 1.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
     current_frame_sweep     = True,
+    current_frame_areas     = False,
     enable_termination      = True,
     strict_termination      = False,
     use_stock_areas         = True,
@@ -94,7 +92,7 @@ env = gym.make(
     render_labels           = True,
     visual_debugging        = True,
     print_fea_scores        = True,
-    reward_debug            = False,
+    reward_debug            = True,
     render_centroids        = True,
     render_vicinity         = True,
 )

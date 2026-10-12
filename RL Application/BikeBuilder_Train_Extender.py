@@ -70,7 +70,7 @@ stock_areas = (raw_areas / area_maxes).astype(np.float32)
 # =============================================================================
 # SEEDING
 # =============================================================================
-seed = seed_everything(696307358)   # empty = new seed. Current testing seed = 696307358
+seed = seed_everything(453908393)   # empty = new seed. Current testing seed = 696307358
 print(f"Using seed: {seed}")
 
 # =============================================================================
@@ -93,11 +93,12 @@ env_kwargs = dict(
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
     max_step        = 35,
-    progress_weight = 1.0,
+    progress_weight = 0.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
     current_frame_sweep     = True,
+    current_frame_areas     = False,
     enable_termination      = True,
     strict_termination      = False,
     use_stock_areas         = True,
@@ -125,7 +126,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 2_500_000
+total_timesteps       = 5_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -184,7 +185,7 @@ diary.start(
 # =============================================================================
 eval_callback   = EvalCallback(**callback_kwargs) # type: ignore
 custom_callback = BikeBuilder_Callback()
-model = PPO.load("logs/20260929_150950/best_model/best_model", env=train_env, device="auto")             # type: ignore
+model = PPO.load("logs/20261007_113559/best_model/best_model", env=train_env, device="auto")             # type: ignore
 
 # --- Parameter count check ---
 total_params      = sum(p.numel() for p in model.policy.parameters())

@@ -43,23 +43,58 @@ for _, row in bikes_dataframe.iterrows():
 # Action order: [frame_idx, attach_tar, attach_cand, mirror]
 
 # Testing optimized variant of Wallacei:
-mock_actions = [
-    np.array([0,4,3,1]),
-    np.array([4,1,3,0]),
-    np.array([22,0,2,0]),
-    np.array([11,0,0,1]),
-    np.array([10,2,0,1]),
-    np.array([13,3,2,1]),
-    np.array([8,4,0,1]),
-    np.array([17,3,4,1]),
-    np.array([7,2,0,0]),
-    np.array([3,3,0,1]),
-    np.array([20,3,0,0]),
-    np.array([5,3,2,0]),
-    np.array([14,4,0,0]),
-    np.array([18,3,2,0]),
 
+mock_actions = [
+    np.array([19,3,3,0]),
+    np.array([7,1,2,1]),
+    np.array([23,4,3,1]),
+    np.array([1,0,3,1]),
+    np.array([16,1,3,0]),
+    np.array([4,1,3,0]),
+    np.array([20,0,2,0]),
+    np.array([15,4,0,1]),
+    np.array([8,2,2,0]),
+    np.array([10,4,2,1]),
+    np.array([22,4,4,0]),
+    np.array([17,1,2,0]),
+    np.array([13,0,2,0]),
 ]
+
+# Variant prior to setting stock to 35 correctly (08-10-26)
+# mock_actions = [
+#     np.array([9,3,0,0]),
+#     np.array([20,3,4,1]),
+#     np.array([22,1,1,0]),
+#     np.array([18,4,3,0]),
+#     np.array([19,0,3,1]),
+#     np.array([0,0,2,1]),
+#     np.array([7,0,2,0]),
+#     np.array([21,0,4,1]),
+#     np.array([24,2,2,0]),
+#     np.array([2,4,4,1]),
+#     np.array([5,2,2,0]),
+#     np.array([17,4,0,0]),
+#     np.array([3,3,2,1]),
+#     np.array([14,4,2,0]),
+# ]
+
+# mock_actions = [
+#     np.array([0,4,3,1]),
+#     np.array([4,1,3,0]),
+#     np.array([22,0,2,0]),
+#     np.array([11,0,0,1]),
+#     np.array([10,2,0,1]),
+#     np.array([13,3,2,1]),
+#     np.array([8,4,0,1]),
+#     np.array([17,3,4,1]),
+#     np.array([7,2,0,0]),
+#     np.array([3,3,0,1]),
+#     np.array([20,3,0,0]),
+#     np.array([5,3,2,0]),
+#     np.array([14,4,0,0]),
+#     np.array([18,3,2,0]),
+
+# ]
 
 # Testing tension both ways 2:
 # mock_actions = [
@@ -195,6 +230,8 @@ env = gym.make(
     render_mode          = "human",
     disable_env_checker  = True,
     shuffle_stock        = False,
+    progress_weight      = 1.0,
+    distance_weight      = 1.0,
     use_stock_areas      = False,
     render_labels        = True,
     render_centroids     = True,
@@ -204,6 +241,7 @@ env = gym.make(
     enable_fea           = True,
     print_fea_scores     = True,
     reward_debug         = True,
+    use_positive_stock_norm = True
 )
 
 env.metadata["render_fps"] = 45

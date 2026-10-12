@@ -26,14 +26,14 @@ from BikeBuilder_Custom_Policy import MaskablePolicy
 # SWEEP DEFINITION
 # =============================================================================
 CONFIGS = [
-    {"seed": 230923904,  "note": "Seeding sweep with seed 230923904"},
+    {"seed": 696307358,  "note": "Seeding sweep with seed 696307358"},
     {"seed": 453908393,  "note": "Seeding sweep with seed 453908393"},
     {"seed": 123948430,  "note": "Seeding sweep with seed 123948430"},
-    {"seed": 112233303,  "note": "Seeding sweep with seed 112233303"},
-    {"seed": 432940201,  "note": "Seeding sweep with seed 432940201"},
-    {"seed": 159345341,  "note": "Seeding sweep with seed 159345341"},
-    {"seed": 230946962,  "note": "Seeding sweep with seed 230946962"},
-    {"seed": 340958459,  "note": "Seeding sweep with seed 340958459"},
+    # {"seed": 112233303,  "note": "Seeding sweep with seed 112233303"},
+    # {"seed": 432940201,  "note": "Seeding sweep with seed 432940201"},
+    # {"seed": 159345341,  "note": "Seeding sweep with seed 159345341"},
+    # {"seed": 230946962,  "note": "Seeding sweep with seed 230946962"},
+    # {"seed": 340958459,  "note": "Seeding sweep with seed 340958459"},
 ]
 
 # =============================================================================
@@ -89,13 +89,14 @@ print(f"Sweep logging to: {sweep_log_dir}")
 # =============================================================================
 # ENVIRONMENT SETUP
 # =============================================================================
-total_timesteps       = 4_000_000
+total_timesteps       = 8_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
     features_extractor_class  = Custom_PointNet_Extractor,
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
+    debug_entropy             = False,
     # share_features_extractor  = False,
 )
 
@@ -106,11 +107,12 @@ env_kwargs = dict(
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
     max_step        = 35,
-    progress_weight = 0.0,
+    progress_weight = 1.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
     current_frame_sweep     = True,
+    current_frame_areas     = False,
     enable_termination      = True,
     strict_termination      = False,
     use_stock_areas         = True,
@@ -164,10 +166,11 @@ for i, cfg in enumerate(CONFIGS, start=1):
             policy_kwargs   = policy_kwargs,
             n_steps         = 256,
             batch_size      = 128,
-            verbose         = 1,
+            verbose         = 0,
             tensorboard_log = sweep_log_dir,
             device          = "auto",
             seed            = seed,
+            ent_coef        = 0.015
             # target_kl       = 0.06,
         )
 

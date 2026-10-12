@@ -14,9 +14,11 @@ class InternalVariables:
     connection_offset : float = 80.0
     start_rotation    : float = 0.25 * math.pi
     # ---  Data  Handling  ---
-    curve_samples     : int   = 100
+    curve_samples     : int   = 25
     curve_norm_range  : int   = 8200
-    stock_norm_range  : int   = 630 # Changed from 630 for stock of 25 to 700 for stock of 35 or 50
+    stock_norm_range  : int   = 700 # Changed from 630 for stock of 25 to 700 for stock of 35 or 50
+    stock_areas_minimum    : bool = True
+    stock_areas_columnwise : bool = False
     # ---  Bounding Space  ---
     origin_position   : tuple[float, float] = (500,500)
     x_bounds          : tuple[float, float] = (0, 8000)
@@ -49,12 +51,12 @@ class InternalVariables:
     progress_multiplier: float = 1.2
     progress_exponent  : float = 1.0
     # --- FEA Reward Variables ---
-    max_reward_deform      : float = 10.0
-    max_reward_tension     : float = 10.0
-    max_reward_compression : float = 10.0
-    deform_reward          : tuple[float, float] = (0.5, 300)      # (low, high), cm
-    tension_reward         : tuple[float, float] = (20, 2500)   # (low, high), kN/cm²
-    compression_reward     : tuple[float, float] = (20, 2500)   # (low, high), kN/cm²
+    max_reward_deform      : float = 8.0
+    max_reward_tension     : float = 8.0
+    max_reward_compression : float = 8.0
+    deform_reward          : tuple[float, float] = (0.2, 300)      # (low, high), cm
+    tension_reward         : tuple[float, float] = (10, 2500)   # (low, high), kN/cm² # Allowable: 62.1
+    compression_reward     : tuple[float, float] = (10, 2500)   # (low, high), kN/cm² # Allowable: 48.3
     fea_reward_steepness   : float = 5.0
     fea_recip_power_deform : float = 0.010
     fea_recip_power_fibre  : float = 0.150
@@ -88,19 +90,19 @@ class InternalVariables:
     # ---   FEA  pre-flight   ---
     load_indices     : tuple = (0,3)
     load_divider     : int   = 5
-    load_ray_trim    : float = 40.0
-    load_double_ray  : bool  = True
+    load_ray_trim    : float = 40.0         # Half of the connector distance
+    load_double_ray  : bool  = False
     load_ray_spacing : float = 25.0         # For double rays
     tension_trim     : float = 10.0         # mm — trim from each end before the intersection check
     tension_count    : int   = 4            # lookahead window when building chords
     tension_thresh   : tuple[float, float] = (2, 4000)    # mm — (min, max) allowed chord length
     # ---    FEA Variables    ---
-    tributary_width         : float = 0.50                      # in metres
+    tributary_width         : float = 0.65                     # in metres
     deck_range              : tuple[float, float] = (0, 8000)   # span of the deck in mm
     connector_OD            : float = 30.0                      # mm
     connector_thickness     : float = 5                         # mm
     tension_OD              : float = 18.0                      # mm
-    default_load            : float = 7.50                      # kN/m2
+    default_load            : float = 7.35                      # kN/m2
     shear_correction_factor : float = 0.5
     # ---    FEA Materials    ---
     gamma_frames            : float = 78.50                     # kN/m3
@@ -118,15 +120,15 @@ class InternalVariables:
     roller_colour  : tuple[int, int, int] = (98,  0,   150)
     # --- Extractor Behaviour ---
     fuse_mask_in_stock  : bool = True
-    fuse_mask_in_areas  : bool = True
+    fuse_mask_in_areas  : bool = False
     fuse_areas_in_stock : bool = False
-    CF_sentinel_skip    : bool = True
+    CF_sentinel_skip    : bool = False
     # ---  Extractor Layers   ---
     guide_curve_out    : int = 32
     stock_geometry_out : int = 64
-    stock_areas_out    : int = 64
+    stock_areas_out    : int = 24
     stock_mask_out     : int = 16
-    current_out        : int = 64
+    current_out        : int = 16
     progress_out       : int = 8
     # ---   PointNet Layers   ---
     pt_current_out     : int = 16

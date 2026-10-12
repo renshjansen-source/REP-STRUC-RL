@@ -15,7 +15,7 @@ import environment
 from internal_variables import IV
 from BikeBuilder_Seeder import seed_everything
 from environment.envs.BikeBuilder_env_PPO   import BikeBuilder_Env
-from environment.envs.BikeBuilder_Utilities import resample_curve, normalized_cross_sections, doubled_tube_section
+from environment.envs.BikeBuilder_Utilities import resample_curve, normalized_cross_sections, doubled_tube_section, normalize_stock_areas
 from environment.envs.BikeBuilder_Classes   import BikeFrame
 from BikeBuilder_Custom_Extractor import Custom_PointNet_Extractor
 from BikeBuilder_Callback  import BikeBuilder_Callback
@@ -63,9 +63,7 @@ raw_areas = np.array([
     for i in range(len(crs_dataframe))
 ], dtype=np.float32)
 
-area_maxes = raw_areas.max(axis=0) # Migrate this to normalized_cross_sections
-area_maxes[area_maxes == 0] = 1.0
-stock_areas = (raw_areas / area_maxes).astype(np.float32)
+stock_areas = normalize_stock_areas(raw_areas)
 
 # =============================================================================
 # SEEDING
@@ -93,12 +91,12 @@ env_kwargs = dict(
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
     max_step        = 35,
-    progress_weight = 0.0,
+    progress_weight = 1.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
     current_frame_sweep     = True,
-    current_frame_areas     = True,
+    current_frame_areas     = False,
     enable_termination      = True,
     strict_termination      = False,
     use_stock_areas         = True,
@@ -106,6 +104,26 @@ env_kwargs = dict(
     full_overshot           = True,
     normalization_type      = 'bounding', # 'curve' or 'bounding'
 )
+
+np.set_printoptions(precision=3, suppress=True, linewidth=150)
+
+# QUICK CHECK FOR AREAS NORMALIZATION
+# 1. What the training script produces (columns: ST TT HT DT CS SS)
+print("stock_areas shape:", stock_areas.shape)
+print(stock_areas[:10])
+print("col min :", stock_areas.min(axis=0))
+print("col max :", stock_areas.max(axis=0))
+print("col mean:", stock_areas.mean(axis=0))
+print("col std :", stock_areas.std(axis=0))
+
+# 2. What the agent sees after reset (shuffled by perm)
+env = gym.make("environment/BikeBuilder-v0", **env_kwargs)
+obs, _ = env.reset(seed=seed)
+perm = env.unwrapped.perm
+print("obs shape:", obs["stock_areas"].shape)
+print(obs["stock_areas"][:10])
+print("matches stock_areas[perm]:", np.allclose(obs["stock_areas"], stock_areas[perm]))
+env.close()
 
 train_env = make_vec_env(
     "environment/BikeBuilder-v0",
@@ -126,7 +144,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 2_500_000
+total_timesteps       = 3_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -148,7 +166,7 @@ model_kwargs = dict(
     seed            = seed,
     n_steps         = 256, # 2048 / 4 environments
     batch_size      = 128,
-    # ent_coef        = 0.01,
+    # ent_coef        = 0.02,
     # n_epochs        = 10,
     # target_kl       = 0.06,
     # clip_range_vf   = 0.2,

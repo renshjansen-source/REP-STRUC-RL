@@ -61,6 +61,16 @@ def normalized_cross_sections(outer_diameter, thickness):
     
     return cross_section
 
+def normalize_stock_areas(raw_areas: np.ndarray) -> np.ndarray:
+    axis  = 0 if IV.stock_areas_columnwise else None
+    a_max = raw_areas.max(axis=axis)
+    a_min = raw_areas.min(axis=axis) if IV.stock_areas_minimum else 0.0
+
+    span = a_max - a_min
+    span = np.where(span == 0, 1.0, span)
+
+    return ((raw_areas - a_min) / span).astype(np.float32)
+
 # =============================================================================
 # FUNCTIONS - OPERATIONAL LOGICS
 # =============================================================================
