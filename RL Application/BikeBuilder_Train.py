@@ -109,21 +109,21 @@ np.set_printoptions(precision=3, suppress=True, linewidth=150)
 
 # QUICK CHECK FOR AREAS NORMALIZATION
 # 1. What the training script produces (columns: ST TT HT DT CS SS)
-print("stock_areas shape:", stock_areas.shape)
-print(stock_areas[:10])
-print("col min :", stock_areas.min(axis=0))
-print("col max :", stock_areas.max(axis=0))
-print("col mean:", stock_areas.mean(axis=0))
-print("col std :", stock_areas.std(axis=0))
+# print("stock_areas shape:", stock_areas.shape)
+# print(stock_areas[:10])
+# print("col min :", stock_areas.min(axis=0))
+# print("col max :", stock_areas.max(axis=0))
+# print("col mean:", stock_areas.mean(axis=0))
+# print("col std :", stock_areas.std(axis=0))
 
-# 2. What the agent sees after reset (shuffled by perm)
-env = gym.make("environment/BikeBuilder-v0", **env_kwargs)
-obs, _ = env.reset(seed=seed)
-perm = env.unwrapped.perm
-print("obs shape:", obs["stock_areas"].shape)
-print(obs["stock_areas"][:10])
-print("matches stock_areas[perm]:", np.allclose(obs["stock_areas"], stock_areas[perm]))
-env.close()
+# # 2. What the agent sees after reset (shuffled by perm)
+# env = gym.make("environment/BikeBuilder-v0", **env_kwargs)
+# obs, _ = env.reset(seed=seed)
+# perm = env.unwrapped.perm
+# print("obs shape:", obs["stock_areas"].shape)
+# print(obs["stock_areas"][:10])
+# print("matches stock_areas[perm]:", np.allclose(obs["stock_areas"], stock_areas[perm]))
+# env.close()
 
 train_env = make_vec_env(
     "environment/BikeBuilder-v0",
@@ -144,7 +144,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 3_000_000
+total_timesteps       = 100_000
 enable_action_masking = True
 
 policy_kwargs = dict(

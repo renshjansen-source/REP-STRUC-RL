@@ -29,7 +29,7 @@ CONFIGS = [
     {"seed": 696307358,  "note": "Seeding sweep with seed 696307358"},
     {"seed": 453908393,  "note": "Seeding sweep with seed 453908393"},
     {"seed": 123948430,  "note": "Seeding sweep with seed 123948430"},
-    # {"seed": 112233303,  "note": "Seeding sweep with seed 112233303"},
+    {"seed": 112233303,  "note": "Seeding sweep with seed 112233303"},
     # {"seed": 432940201,  "note": "Seeding sweep with seed 432940201"},
     # {"seed": 159345341,  "note": "Seeding sweep with seed 159345341"},
     # {"seed": 230946962,  "note": "Seeding sweep with seed 230946962"},
@@ -89,7 +89,7 @@ print(f"Sweep logging to: {sweep_log_dir}")
 # =============================================================================
 # ENVIRONMENT SETUP
 # =============================================================================
-total_timesteps       = 8_000_000
+total_timesteps       = 5_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -170,7 +170,7 @@ for i, cfg in enumerate(CONFIGS, start=1):
             tensorboard_log = sweep_log_dir,
             device          = "auto",
             seed            = seed,
-            ent_coef        = 0.015
+            ent_coef        = 0.01,
             # target_kl       = 0.06,
         )
 

@@ -526,3 +526,29 @@ def fea_reward_recip(fea_result: dict) -> tuple[float, float, float]:
     total_reward = (disp_reward, tens_reward, comp_reward)
 
     return total_reward
+
+# =============================================================================
+# FUNCTIONS - FEA COMPLIANCE
+# =============================================================================
+# name -> (info key, allowable magnitude, side)
+#   "upper": value <= +allowable   (tension, deformation)
+#   "lower": value >= -allowable   (compression; sig_min is negative)
+FEA_CRITERIA = {
+    "deform"                 : ("fea_max_disp",      IV.allowable_deform,                 "upper"),
+    "frame_tension"          : ("frame_sig_max",     IV.allowable_frame_tension,          "upper"),
+    "frame_compression"      : ("frame_sig_min",     IV.allowable_frame_compression,      "lower"),
+    "connection_tension"     : ("connector_sig_max", IV.allowable_connection_tension,     "upper"),
+    "connection_compression" : ("connector_sig_min", IV.allowable_connection_compression, "lower"),
+    "cable_tension"          : ("cable_sig_max",     IV.allowable_cable_tension,          "upper"),
+    "cable_compression"      : ("cable_sig_min",     IV.allowable_cable_compression,      "lower"),
+}
+
+def fea_compliance(fea_values: dict) -> dict[str, bool]:
+    checks = {}
+    for name, (key, allowable, side) in FEA_CRITERIA.items():
+        value = fea_values[key]
+        if side == "upper":
+            checks[name] = bool(value <= allowable + IV.fea_check_tolerance)
+        else:
+            checks[name] = bool(value >= -allowable - IV.fea_check_tolerance)
+    return checks
