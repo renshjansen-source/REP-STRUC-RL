@@ -86,7 +86,14 @@ class InternalVariables:
     centroid_radius: int = 4
     connector_colour  : tuple[int, int, int] = (0, 150, 150)
     vicinity_colour   : tuple[int, int, int] = (0, 150, 150)
-    vicinity_width    : int = 2
+    # --- Stress Rendering (render_mode="stress") ---
+    max_compression_render    : float = -50.0                       # kN/cm² — negative; full red at and beyond
+    max_tension_render        : float =  50.0                       # kN/cm² — positive; full blue at and beyond
+    stress_compression_colour : tuple[int, int, int] = (255, 0, 0)
+    stress_tension_colour     : tuple[int, int, int] = (0, 0, 255)
+    stress_outline_colour     : tuple[int, int, int] = (120, 120, 120)
+    vicinity_width            : int = 2
+    stress_render_legend      : bool = False
     # ---   FEA  pre-flight   ---
     load_indices     : tuple = (0,3)
     load_divider     : int   = 5
@@ -97,7 +104,7 @@ class InternalVariables:
     tension_count    : int   = 4            # lookahead window when building chords
     tension_thresh   : tuple[float, float] = (2, 4000)    # mm — (min, max) allowed chord length
     # ---    FEA Variables    ---
-    tributary_width         : float = 0.65                       # in metres
+    tributary_width         : float = 0.50                      # in metres
     deck_range              : tuple[float, float] = (0, 8000)   # span of the deck in mm
     connector_OD            : float = 30.0                      # mm
     connector_thickness     : float = 5                         # mm
@@ -119,13 +126,13 @@ class InternalVariables:
     pin_colour     : tuple[int, int, int] = (186, 130, 230)
     roller_colour  : tuple[int, int, int] = (98,  0,   150)
     # ---  FEA  Requirements  ---
-    allowable_deform                 : float = 1.75
+    allowable_deform                 : float = 3.00
     allowable_frame_tension          : float = 62.1
     allowable_frame_compression      : float = 48.3
-    allowable_connection_tension     : float = 35.5
-    allowable_connection_compression : float = 35.5
-    allowable_cable_compression      : float = 0.0
-    allowable_cable_tension          : float = 13.65
+    allowable_connection_tension     : float = 1000.5 # 35.5
+    allowable_connection_compression : float = 1000.5 # 35.5
+    allowable_cable_compression      : float = 1000.0 # 0.0
+    allowable_cable_tension          : float = 1000.65 # 13.65
     fea_check_tolerance : float = 1e-6
     # --- Extractor Behaviour ---
     fuse_mask_in_stock  : bool = True

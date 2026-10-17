@@ -432,7 +432,7 @@ def check_termination(
     return False, 0.0, False
 
 # =============================================================================
-# FUNCTIONS - RENDERING
+# FUNCTIONS - CROSS SECTION ADJUSTMENTS
 # =============================================================================
 def doubled_tube_section(outer_diameter, thickness):
     # Returns (D_new, t_new) for a single tube whose annulus area equals
@@ -451,6 +451,101 @@ def coordinate_to_pixel(point, window_size, bounds, bounding_range):
     pixel_coordinate = (pixel_x, pixel_z)
 
     return pixel_coordinate
+
+def stress_to_colour(stress: float, max_compression: float, max_tension: float) -> tuple[int, int, int]:
+    # Diverging red-white-blue map. Compression is negative, tension positive (kN/cm²).
+    # Values beyond the render range are clamped to the full end colour.
+    if stress < 0.0:
+        fraction   = min(stress / max_compression, 1.0)     # both negative -> positive fraction
+        end_colour = IV.stress_compression_colour
+    else:
+        fraction   = min(stress / max_tension, 1.0)
+        end_colour = IV.stress_tension_colour
+
+    return tuple(int(round(255 + fraction * (channel - 255))) for channel in end_colour)   # type: ignore
+
+def draw_scaled_member(canvas, start_px, end_px, width_px: float, colour, outline_colour) -> None:
+    # Draws a member as a quad of true perpendicular width. pygame.draw.line measures thick widths
+    # horizontally or vertically, which makes diagonal members render thinner than they are.
+    import pygame 
+    direction = np.array([end_px[0] - start_px[0], end_px[1] - start_px[1]], dtype=np.float64)
+    length    = np.linalg.norm(direction)
+    if length < 1e-9:
+        return
+
+    half_width = max(width_px, 1.0) / 2.0
+    normal     = np.array([-direction[1], direction[0]]) / length * half_width
+
+    corners = [
+        (start_px[0] + normal[0], start_px[1] + normal[1]),
+        (end_px[0]   + normal[0], end_px[1]   + normal[1]),
+        (end_px[0]   - normal[0], end_px[1]   - normal[1]),
+        (start_px[0] - normal[0], start_px[1] - normal[1]),
+    ]
+    pygame.draw.polygon(canvas, colour, corners)
+    pygame.draw.polygon(canvas, outline_colour, corners, 1)   # keeps near-zero (white) members visible
+
+def draw_grid(canvas, font, draw_size, canvas_size, bounds, bounding_range) -> None:
+    x = 0
+    import pygame 
+    while x <= bounds["x_max"]:
+        px = coordinate_to_pixel((x, 0), draw_size, bounds, bounding_range)[0]
+        pygame.draw.line(canvas, IV.grid_colour, (px, 0), (px, canvas_size[1]), 1)
+        label = font.render(f"{int(x / 1000)}m", True, IV.label_colour)
+        canvas.blit(label, (px - label.get_width() // 2, canvas_size[1] - label.get_height() - 2))
+        x += IV.grid_spacing
+
+    z = 0
+    while z <= bounds["z_max"]:
+        pz = coordinate_to_pixel((0, z), draw_size, bounds, bounding_range)[1]
+        pygame.draw.line(canvas, IV.grid_colour, (0, pz), (canvas_size[0], pz), 1)
+        label = font.render(f"{int(z / 1000)}m", True, IV.label_colour)
+        canvas.blit(label, (2, pz - label.get_height() // 2))
+        z += IV.grid_spacing
+
+def draw_stress_legend(canvas, font, panel_x: int, panel_height: int, fea_result: "dict | None") -> None:
+    # Vertical colour bar: tension (blue) on top, compression (red) at the bottom
+    import pygame 
+    pygame.draw.rect(canvas, IV.side_panel_colour, (panel_x, 0, IV.side_panel_width, panel_height))
+
+    bar_x, bar_width = panel_x + 20, 24
+    bar_top          = 40
+    bar_height       = max(panel_height - 260, 100)
+
+    title = font.render("Fibre stress [kN/cm2]", True, IV.side_panel_text_colour)
+    canvas.blit(title, (panel_x + 10, 12))
+
+    for row in range(bar_height):
+        fraction = row / (bar_height - 1)    # 0 = top (max tension), 1 = bottom (max compression)
+        stress   = IV.max_tension_render + fraction * (IV.max_compression_render - IV.max_tension_render)
+        colour   = stress_to_colour(stress, IV.max_compression_render, IV.max_tension_render)
+        pygame.draw.line(canvas, colour, (bar_x, bar_top + row), (bar_x + bar_width, bar_top + row))
+    pygame.draw.rect(canvas, IV.stress_outline_colour, (bar_x, bar_top, bar_width, bar_height), 1)
+
+    # Tick labels: max tension, zero, max compression
+    zero_row = bar_top + int(IV.max_tension_render / (IV.max_tension_render - IV.max_compression_render) * (bar_height - 1))
+    for value, row_px in (
+        (IV.max_tension_render,     bar_top),
+        (0.0,                       zero_row),
+        (IV.max_compression_render, bar_top + bar_height - 1),
+    ):
+        pygame.draw.line(canvas, IV.side_panel_text_colour, (bar_x + bar_width, row_px), (bar_x + bar_width + 5, row_px))
+        label = font.render(f"{value:+.1f}", True, IV.side_panel_text_colour)
+        canvas.blit(label, (bar_x + bar_width + 8, row_px - label.get_height() // 2))
+
+    # Actual extremes of this structure
+    text_y = bar_top + bar_height + 20
+    if fea_result is None or not fea_result["converged"]:
+        canvas.blit(font.render("No FEA result", True, IV.side_panel_text_colour), (panel_x + 10, text_y))
+        return
+
+    lines = [f"Max disp: {fea_result['max_displacement']:.2f} cm", ""]
+    for label_text, key in (("Frame", "frame_stress"), ("Connector", "connector_stress"), ("Cable", "cable_stress")):
+        lines.append(f"{label_text}:")
+        lines.append(f"  max {fea_result[key]['sig_max']:+.2f}  min {fea_result[key]['sig_min']:+.2f}")
+    for line in lines:
+        canvas.blit(font.render(line, True, IV.side_panel_text_colour), (panel_x + 10, text_y))
+        text_y += IV.side_panel_line_height
 
 # =============================================================================
 # FUNCTIONS - FEA REWARDS

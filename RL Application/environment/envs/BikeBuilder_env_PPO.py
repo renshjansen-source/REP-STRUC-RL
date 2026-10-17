@@ -28,6 +28,10 @@ from environment.envs.BikeBuilder_Utilities import (
     log_debug_row,
     print_debug_report,
     build_current_areas_observation,
+    stress_to_colour,
+    draw_scaled_member,
+    draw_grid,
+    draw_stress_legend,
     )
 
 from environment.envs.BikeBuilder_Classes import PointDict, BikeFrame, ShapeGrammar, EpisodeGrammar, BikeBridge
@@ -38,7 +42,7 @@ from environment.envs.BikeBuilder_FEA import run_fea, print_fea_result
 # =============================================================================
 
 class BikeBuilder_Env(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array", "sleek"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array", "sleek", "stress"], "render_fps": 4}
     # ─────────────────────────────────────────────────────────────────────────
     # INITIALIZATION
     # ─────────────────────────────────────────────────────────────────────────
@@ -267,6 +271,15 @@ class BikeBuilder_Env(gym.Env):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+
+        if self.render_mode == "stress":
+            if not (IV.max_compression_render < 0.0 < IV.max_tension_render):
+                raise ValueError(
+                    f"Stress render range must satisfy max_compression_render < 0 < max_tension_render, "
+                    f"got ({IV.max_compression_render}, {IV.max_tension_render})"
+                )
+            if not self.enable_fea:
+                print("[render] render_mode='stress' with enable_fea=False: frames render uncoloured.")
 
     # ─────────────────────────────────────────────────────────────────────────
     # OBSERVATION FUNCTION
@@ -586,7 +599,10 @@ class BikeBuilder_Env(gym.Env):
             self.tension_valid   = self.bike_bridge.tension_valid
 
             if self.enable_fea and self.load_valid and self.tension_valid:
-                self.fea_result = run_fea(self.bike_bridge)
+                self.fea_result = run_fea(
+                    self.bike_bridge,
+                    record_element_stress = (self.render_mode == "stress"),
+                )
                 self.fea_ran    = True
                 if self.print_fea_scores:
                     print_fea_result(self.fea_result)
@@ -640,6 +656,8 @@ class BikeBuilder_Env(gym.Env):
     def render(self):
         if self.render_mode == "human":
             return self.render_canvas()
+        if self.render_mode == "stress":
+            return self.render_stress()
     
     def render_canvas(self):
         if self.window is None:
@@ -755,6 +773,57 @@ class BikeBuilder_Env(gym.Env):
                         break   # stop rather than overflow past the visible window
 
         # Build Canvas
+        self.window.blit(canvas, canvas.get_rect())
+        pygame.event.pump()
+        pygame.display.update()
+        self.clock.tick(self.metadata["render_fps"])
+
+        # +++ Stress render mode
+    
+    def render_stress(self):
+        window_size = self.window_size if IV.stress_render_legend else self.canvas_size     # +++ drop side panel width when legend is off
+
+        if self.window is None:
+            pygame.init()
+            pygame.display.init()
+            pygame.font.init()
+            self.window     = pygame.display.set_mode(window_size)                          # +++ window_size
+            self.font       = pygame.font.SysFont('Arial', 10)
+            self.panel_font = pygame.font.SysFont('Arial', IV.side_panel_font_size)
+        if self.clock is None:
+            self.clock = pygame.time.Clock()
+
+        canvas = pygame.Surface(window_size)                                                # +++ window_size
+        canvas.fill((255, 255, 255))
+
+        # draw_grid(canvas, self.font, self.draw_size, self.canvas_size, self.bounds, self.bounding_range)
+
+        curve_pixels = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in self.guide_curve]
+        pygame.draw.lines(canvas, IV.g_curve_colour, False, curve_pixels, 2)
+
+        element_stress = self.fea_result["element_stress"] if self.fea_result is not None else None
+
+        if element_stress:
+            # World mm -> pixels, for to-scale member widths
+            pixels_per_mm = self.draw_size[0] / self.bounding_range[0]
+
+            # Ascending |stress| so the most critical members are drawn on top
+            for record in sorted(element_stress, key=lambda r: abs(r["fibre_stress"])):
+                start_px = coordinate_to_pixel(record["start"], self.draw_size, self.bounds, self.bounding_range)
+                end_px   = coordinate_to_pixel(record["end"],   self.draw_size, self.bounds, self.bounding_range)
+                colour   = stress_to_colour(record["fibre_stress"], IV.max_compression_render, IV.max_tension_render)
+                width_px = record["outer_diameter"] * pixels_per_mm
+                draw_scaled_member(canvas, start_px, end_px, width_px, colour, IV.stress_outline_colour)
+        else:
+            # No converged FEA (mid-episode, overshoot, invalid loads): plain frame outlines
+            for frame in self.placed_frames:
+                j = [coordinate_to_pixel(p, self.draw_size, self.bounds, self.bounding_range) for p in frame.points]
+                for a, b in ((0, 1), (1, 2), (2, 3), (3, 4), (4, 0), (3, 0)):
+                    pygame.draw.line(canvas, IV.stress_outline_colour, j[a], j[b], 1)
+
+        if IV.stress_render_legend:                                                         # +++
+            draw_stress_legend(canvas, self.panel_font, self.canvas_size[0], self.window_size[1], self.fea_result)
+
         self.window.blit(canvas, canvas.get_rect())
         pygame.event.pump()
         pygame.display.update()

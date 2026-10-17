@@ -11,6 +11,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util  import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback
 
+
 import environment
 from internal_variables import IV
 from BikeBuilder_Seeder import seed_everything
@@ -144,7 +145,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 100_000
+total_timesteps       = 1_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -166,7 +167,7 @@ model_kwargs = dict(
     seed            = seed,
     n_steps         = 256, # 2048 / 4 environments
     batch_size      = 128,
-    # ent_coef        = 0.02,
+    ent_coef        = 0.010,
     # n_epochs        = 10,
     # target_kl       = 0.06,
     # clip_range_vf   = 0.2,

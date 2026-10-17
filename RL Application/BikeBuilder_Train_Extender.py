@@ -93,7 +93,7 @@ env_kwargs = dict(
     guide_curve     = sampled_curve,
     stock_areas     = stock_areas,
     max_step        = 35,
-    progress_weight = 0.0,
+    progress_weight = 1.0,
     distance_weight = 1.0,
     use_positive_stock_norm = True,
     shuffle_stock           = True,
@@ -126,7 +126,7 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 5_000_000
+total_timesteps       = 2_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
@@ -146,7 +146,7 @@ model_kwargs = dict(
     seed            = seed,
     n_steps         = 256, # 2048 / 4 environments
     batch_size      = 128,
-    # ent_coef        = 0.01,
+    ent_coef        = 0.015,
     # n_epochs        = 10,
     # target_kl       = 0.06,
     # clip_range_vf   = 0.2,
@@ -185,7 +185,7 @@ diary.start(
 # =============================================================================
 eval_callback   = EvalCallback(**callback_kwargs) # type: ignore
 custom_callback = BikeBuilder_Callback()
-model = PPO.load("logs/20261007_113559/best_model/best_model", env=train_env, device="auto")             # type: ignore
+model = PPO.load("logs/20261008_212603/best_model/best_model", env=train_env, device="auto")             # type: ignore
 
 # --- Parameter count check ---
 total_params      = sum(p.numel() for p in model.policy.parameters())

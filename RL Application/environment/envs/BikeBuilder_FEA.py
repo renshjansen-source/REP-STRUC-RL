@@ -138,7 +138,7 @@ def build_frame_elements(bridge, id_to_tag: dict, id_to_xz: dict, elements: list
                 node_a = register_node(id_to_tag, id_to_xz, bridge, point_a_id)
                 node_b = register_node(id_to_tag, id_to_xz, bridge, point_b_id)
 
-                elements.append(("beam", "frame", node_a, node_b, A, Iz, W, Avy))
+                elements.append(("beam", "frame", node_a, node_b, A, Iz, W, Avy, outer_diameter))           # +++ OD appended for stress rendering
 
 # =============================================================================
 # ELEMENT CONSTRUCTION — CONNECTORS
@@ -167,7 +167,7 @@ def build_connector_elements(bridge: BikeBridge, id_to_tag: dict, id_to_xz: dict
                 node_a = register_node(id_to_tag, id_to_xz, bridge, point_a_id)
                 node_b = register_node(id_to_tag, id_to_xz, bridge, point_b_id)
 
-                elements.append(("beam", "connector", node_a, node_b, A, Iz, W, Avy))
+                elements.append(("beam", "connector", node_a, node_b, A, Iz, W, Avy, IV.connector_OD))      # +++ OD appended for stress rendering
 
 # =============================================================================
 # ELEMENT CONSTRUCTION — CABLES
@@ -180,7 +180,7 @@ def build_cable_elements(bridge: BikeBridge, id_to_tag: dict, id_to_xz: dict, el
         node_b = register_node(id_to_tag, id_to_xz, bridge, point_b_id)
 
         # Avy is None: trusses are axial-only, shear deformation doesn't apply
-        elements.append(("truss", "cable", node_a, node_b, A, None, None, None))
+        elements.append(("truss", "cable", node_a, node_b, A, None, None, None, IV.tension_OD))     # +++ OD appended for stress rendering
 
 # =============================================================================
 # SOLVER
@@ -219,7 +219,7 @@ def run_solver(
     }
 
     # Register all elements
-    for eid, (kind, category, node_a, node_b, A, Iz, W, Avy) in enumerate(elements, start=1):
+    for eid, (kind, category, node_a, node_b, A, Iz, W, Avy, OD) in enumerate(elements, start=1):    # +++ OD
         if kind == "beam":
             E = E_by_category[category]
             if IV.enable_timoshenko:
@@ -315,39 +315,63 @@ def max_displacement(id_to_tag: dict) -> float:
 # =============================================================================
 # STRESS RECOVERY
 # =============================================================================
+# +++ Per-element fibre stress, shared by stress_scan and element_stress_records
+def element_fibre_stress(eid: int, kind: str, A: float, W: float | None) -> tuple[float, float]:
+    # Returns (elem_max, elem_min) fibre stress in N/mm² — tension positive, compression negative
+    if kind == "beam":
+        N1, V1, M1, N2, V2, M2 = ops.eleResponse(eid, 'localForce')
+        N = -N1   # localForce's N1 reports tension as negative (opposite convention to basicForce/N2)
+        if IV.enable_axial_only_stress:
+            candidates = [N / A]
+        else:
+            candidates = [
+                N / A + M1 / W,
+                N / A - M1 / W,
+                N / A + M2 / W,
+                N / A - M2 / W,
+            ]
+    elif kind == "truss":
+        N, = ops.basicForce(eid)
+        candidates = [N / A]
+    else:
+        raise ValueError(f"Unknown element kind {kind!r} for eid {eid}")
+
+    return max(candidates), min(candidates)
+
 def stress_scan(elements: list, category: str) -> tuple[float | None, float | None]:
     sig_max = None
     sig_min = None
 
-    for eid, (kind, elem_category, node_a, node_b, A, Iz, W, Avy) in enumerate(elements, start=1):
+    for eid, (kind, elem_category, node_a, node_b, A, Iz, W, Avy, OD) in enumerate(elements, start=1):   # +++ OD
         if elem_category != category:
             continue
 
-        if kind == "beam":
-            N1, V1, M1, N2, V2, M2 = ops.eleResponse(eid, 'localForce')
-            N = -N1   # localForce's N1 reports tension as negative (opposite convention to basicForce/N2)
-            if IV.enable_axial_only_stress:
-                candidates = [N / A]
-            else:
-                candidates = [
-                    N / A + M1 / W,
-                    N / A - M1 / W,
-                    N / A + M2 / W,
-                    N / A - M2 / W,
-                ]
-        elif kind == "truss":
-            N, = ops.basicForce(eid)
-            candidates = [N / A]
-        else:
-            raise ValueError(f"Unknown element kind {kind!r} for eid {eid}")
-
-        elem_max = max(candidates)
-        elem_min = min(candidates)
+        elem_max, elem_min = element_fibre_stress(eid, kind, A, W)                                       # +++ shared routine
 
         sig_max = elem_max if sig_max is None else max(sig_max, elem_max)
         sig_min = elem_min if sig_min is None else min(sig_min, elem_min)
 
     return sig_max, sig_min
+
+# +++ Per-element records for the stress render mode
+def element_stress_records(elements: list, id_to_tag: dict, id_to_xz: dict) -> list[dict]:
+    # One record per OpenSees element. fibre_stress is the governing (largest-magnitude) signed
+    # fibre stress of that element, in kN/cm². Tension positive, compression negative.
+    tag_to_xz = {tag: id_to_xz[point_id] for point_id, tag in id_to_tag.items()}
+
+    records = []
+    for eid, (kind, category, node_a, node_b, A, Iz, W, Avy, OD) in enumerate(elements, start=1):
+        elem_max, elem_min = element_fibre_stress(eid, kind, A, W)
+        governing = elem_max if abs(elem_max) >= abs(elem_min) else elem_min
+
+        records.append({
+            "category"       : category,
+            "start"          : tag_to_xz[node_a],
+            "end"            : tag_to_xz[node_b],
+            "outer_diameter" : OD,                                  # mm
+            "fibre_stress"   : governing * STRESS_TO_KN_CM2,        # kN/cm²
+        })
+    return records
 
 # =============================================================================
 # OUTPUT UNIT CONVERSION
@@ -377,7 +401,7 @@ def print_fea_result(result: dict) -> None:
 # =============================================================================
 # ORCHESTRATOR
 # =============================================================================
-def run_fea(bridge: BikeBridge) -> dict:
+def run_fea(bridge: BikeBridge, record_element_stress: bool = False) -> dict:      # +++ flag
     elements  : list = []
     id_to_tag : dict = {}
     id_to_xz  : dict = {}
@@ -409,12 +433,14 @@ def run_fea(bridge: BikeBridge) -> dict:
         connector_max, connector_min = stress_scan(elements, "connector")
         cable_max,     cable_min     = stress_scan(elements, "cable")
         max_disp = max_displacement(id_to_tag)
+        element_stress = element_stress_records(elements, id_to_tag, id_to_xz) if record_element_stress else None   # +++ only for render_mode="stress"
 
         if any(v is None for v in (frame_max, frame_min, connector_max, connector_min, cable_max, cable_min, max_disp)):
             converged = False
     if not converged:
         frame_max = frame_min = connector_max = connector_min = cable_max = cable_min = None
         max_disp = None
+        element_stress = None                                                                       # +++
 
     return {
         "converged"        : converged,
@@ -431,4 +457,5 @@ def run_fea(bridge: BikeBridge) -> dict:
             "sig_max": convert_units(cable_max, STRESS_TO_KN_CM2),
             "sig_min": convert_units(cable_min, STRESS_TO_KN_CM2),
         },
+        "element_stress"    : element_stress,                                                       # +++ None unless requested and converged
     }
