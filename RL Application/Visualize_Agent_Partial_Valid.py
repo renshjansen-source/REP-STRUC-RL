@@ -39,11 +39,11 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20261008_232153_seeding_sweep/453908393_20261009_033910_best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260930_065829/best_model/best_model"   # <- update to the run you want to visualize
 DETERMINISTIC = True
 BASE_SEED     = 0           # episode k is reset with seed BASE_SEED + k -> reproducible runs
 GRID_COLUMNS  = 3
-GRID_ROWS     = 4
+GRID_ROWS     = 1
 MAX_EPISODES  = 2000        # give up after this many episodes; no image is saved if the grid isn't full
 IMAGE_NAME    = "grid_prefix_valid_3_4_2"
 OUTPUT_PATH   = rf"C:\Users\rensh\Documents\Master Thesis\Report\Images and Charts\Reinforcement Learning\Results Data\Repo Export Grid Images\{IMAGE_NAME}.png"
@@ -54,9 +54,9 @@ PREFIX_ACTIONS = [
     np.array([19,3,3,0]),
     np.array([7,1,2,1]),
     np.array([23,4,3,1]),
-    # np.array([1,0,3,1]),
-    # np.array([16,1,3,0]),
-    # np.array([4,1,3,0]),
+    np.array([1,0,3,1]),
+    np.array([16,1,3,0]),
+    np.array([4,1,3,0]),
 ]
 
 # =============================================================================

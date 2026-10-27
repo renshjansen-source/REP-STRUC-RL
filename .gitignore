@@ -1,6 +1,7 @@
 # --- Project-specific ---
 logs/
 logs_backup_1/
+logs_dated/
 TB_Rename_Tags.py
 log comparison - n_steps and batch_sizes/
 

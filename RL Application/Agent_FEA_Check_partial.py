@@ -37,10 +37,12 @@ from environment.envs.BikeBuilder_Classes import BikeFrame
 from BikeBuilder_Extractor import BikeBuilder_Extractor
 from PointNet_Extractor import PointNet_Extractor
 
+# "logs/20261008_232153_seeding_sweep/453908393_20261009_033910_best_model/best_model"
+# "logs/20260930_065829/best_model/best_model"
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20261008_232153_seeding_sweep/453908393_20261009_033910_best_model/best_model"   # <- update to the run you want to evaluate
+MODEL_PATH    = "logs/20260930_065829/best_model/best_model"   # <- update to the run you want to evaluate
 N_EPISODES    = 1000
 DETERMINISTIC = True
 BASE_SEED     = 0           # episode k is reset with seed BASE_SEED + k -> reproducible runs

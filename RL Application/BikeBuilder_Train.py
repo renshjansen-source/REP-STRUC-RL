@@ -19,6 +19,7 @@ from environment.envs.BikeBuilder_env_PPO   import BikeBuilder_Env
 from environment.envs.BikeBuilder_Utilities import resample_curve, normalized_cross_sections, doubled_tube_section, normalize_stock_areas
 from environment.envs.BikeBuilder_Classes   import BikeFrame
 from BikeBuilder_Custom_Extractor import Custom_PointNet_Extractor
+from BikeBuilder_Custom_Extractor_Toggled import Custom_PointNet_Extractor_Toggled
 from BikeBuilder_Callback  import BikeBuilder_Callback
 from BikeBuilder_Custom_Policy import MaskablePolicy
 
@@ -145,11 +146,11 @@ eval_env = make_vec_env(
 # =============================================================================
 # KEYWORD ARGUMENTS
 # =============================================================================
-total_timesteps       = 1_000_000
+total_timesteps       = 15_000_000
 enable_action_masking = True
 
 policy_kwargs = dict(
-    features_extractor_class  = Custom_PointNet_Extractor,
+    features_extractor_class  = Custom_PointNet_Extractor_Toggled,
     features_extractor_kwargs = dict(features_dim=256),
     use_masking               = enable_action_masking,
     # share_features_extractor  = False,

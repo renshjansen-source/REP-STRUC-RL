@@ -41,14 +41,16 @@ class RunTally:
     terminated          : bool = False
     overshot            : bool = False
     true_termination     : bool = False
+    out_of_range_skips  : int = 0
 
 @dataclass
 class RunResult:
     placed_frames   : list[BikeFrame]
-    connection_log  : list[tuple[PointDict, PointDict, bool]]
+    connection_log  : list[tuple[int, PointDict, PointDict, bool]]
+    action_log      : list[list[int]]
+    remaining_options : list[int]
     bike_bridge     : Optional[BikeBridge]
     tally           : RunTally
-
 # =============================================================================
 # MAIN ORCHESTRATION FUNCTION
 # =============================================================================
@@ -61,7 +63,11 @@ def run_baseline_ga(
         progress_weight     : float = 1.0,
         distance_weight     : float = 1.0,
         rank_window         : int   = RANK_WINDOW_DEFAULT,
-        strict_termination  : bool  = False,
+        strict_termination    : bool  = False,
+        full_overshot         : bool  = True,
+        terminal_reward_scale : bool = False,
+        wrap_orientation : bool = True,
+        allowed_points      : Optional[set[PointDict]] = None,
         ) -> RunResult:
 
     assert len(picked_frame) == len(picked_orientation), (
@@ -72,7 +78,9 @@ def run_baseline_ga(
     # --- State initialization, mirroring BikeBuilder_Env.reset() ---
     stock_mask     = np.ones(len(frame_stock), dtype=np.float32)
     placed_frames  : list[BikeFrame] = []
-    connection_log : list[tuple[PointDict, PointDict, bool]] = []
+    connection_log : list[tuple[int, PointDict, PointDict, bool]] = []
+    action_log     : list[list[int]] = []
+    remaining_options : list[int] = []
     previous_frame : Optional[BikeFrame] = None
     mirror_flag    : bool = False
     max_t          : np.float32 = np.float32(0.0)
@@ -106,20 +114,30 @@ def run_baseline_ga(
             max_t           = max_t,
             progress_weight = progress_weight,
             distance_weight = distance_weight,
+            allowed_points  = allowed_points,
         )
 
-        chosen, outcome, _used_rank = resolve_placement(
+        chosen, outcome, _used_rank, remaining_count = resolve_placement(
             ranked_candidates  = ranked,
             picked_orientation = orientation_pick,
             rank_window        = rank_window,
             placed_frames      = placed_frames,
+            wrap_orientation = wrap_orientation,
         )
+
+        # Recorded for every step that reaches resolve_placement (i.e. every
+        # step except reuse skips, which never get this far) — including
+        # "no_progress" and "no_intersection" skips, both of which yield 0.
+        remaining_options.append(remaining_count)
 
         if outcome == "no_progress":
             tally.no_progress_skips += 1
             continue
         if outcome == "no_intersection":
             tally.no_intersect_skips += 1
+            continue
+        if outcome == "out_of_range":
+            tally.out_of_range_skips += 1
             continue
 
         assert chosen is not None  # "placed" outcome always carries a candidate
@@ -129,16 +147,18 @@ def run_baseline_ga(
         max_t        = chosen.new_max_t
 
         placed_frames.append(placed_frame)
-        connection_log.append(chosen.orientation)
+        target, candidate, mirror = chosen.orientation
+        connection_log.append((int(frame_idx), target, candidate, mirror))
+        action_log.append([int(frame_idx), target.value, candidate.value, int(mirror)])
         previous_frame = placed_frame
-        mirror_flag    = chosen.orientation[2]  # mirror bool
+        mirror_flag    = mirror
         stock_mask[frame_idx] = 0.0
         tally.steps_completed += 1
 
         # Termination check — runs after every committed placement.
         terminated, _terminal_reward, overshot = check_termination(
             placed_frame, curve_end, curve_end_tangent,
-            tally.steps_completed, len(picked_frame), strict_termination
+            tally.steps_completed, len(picked_frame), strict_termination, full_overshot, terminal_reward_scale
         )
 
         if terminated:
@@ -155,6 +175,8 @@ def run_baseline_ga(
     return RunResult(
         placed_frames  = placed_frames,
         connection_log = connection_log,
+        action_log     = action_log,
+        remaining_options = remaining_options,
         bike_bridge    = bike_bridge,
         tally          = tally,
     )

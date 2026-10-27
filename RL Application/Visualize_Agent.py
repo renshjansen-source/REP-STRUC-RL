@@ -22,8 +22,8 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20261012_154312/best_model/best_model"   # <- update to the run you want to visualize
-N_EPISODES    = 20
+MODEL_PATH    = "logs/20260930_065829/best_model/best_model"   # <- update to the run you want to visualize
+N_EPISODES    = 1
 DETERMINISTIC = True
 
 # =============================================================================
@@ -88,11 +88,11 @@ env = gym.make(
     enable_fea              = True,
     full_overshot           = True,
     normalization_type      = 'bounding', # 'curve' or 'bounding'
-    render_mode             = 'human',
+    render_mode             = 'stress',
     render_labels           = True,
     visual_debugging        = True,
     print_fea_scores        = True,
-    reward_debug            = False,
+    reward_debug            = True,
     render_centroids        = True,
     render_vicinity         = True,
 )
@@ -112,7 +112,8 @@ episode_seeds  : list[int] = []
 episode_actions: list[list] = []
 
 for episode in range(N_EPISODES):
-    ep_seed = int(np.random.randint(0, 2**31 - 1))
+    ep_seed = int(995)
+    # ep_seed = int(np.random.randint(0, 2**31 - 1))
     episode_seeds.append(ep_seed)
 
     obs, info     = env.reset(seed=ep_seed)

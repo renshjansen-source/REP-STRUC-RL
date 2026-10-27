@@ -25,8 +25,8 @@ class InternalVariables:
     z_bounds          : tuple[float, float] = (0, 2000)
     # ---  File Locations  ---
     arch_v0           : Path = repo_root / "Datasets" / "Curves" / "final_arch_short_true_0_v0.csv"
-    frames_v0         : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_35.csv"
-    crs_v0            : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_new_set_35_crs.csv"
+    frames_v0         : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_alternate_set_2.csv"
+    crs_v0            : Path = repo_root / "Datasets" / "Bike Frames" / "FRAMED_alternate_set_2_crs.csv"
     # --- Tolerance Variables ---
     intersect_tol        : float = 1e-3
     intersect_buffer     : int   = 3
@@ -77,7 +77,7 @@ class InternalVariables:
     rew_label_colour  : tuple[int, int, int] = (0, 0, 0)
     leader_colour     : tuple[int, int, int] = (130, 130, 130)
     side_panel_width  : int = 220
-    side_panel_colour : tuple[int, int, int] = (245, 245, 245)
+    side_panel_colour : tuple[int, int, int] = (255, 255, 255)
     side_panel_text_colour : tuple[int, int, int] = (0, 0, 0)
     side_panel_font_size   : int = 14
     side_panel_line_height : int = 14
@@ -87,13 +87,13 @@ class InternalVariables:
     connector_colour  : tuple[int, int, int] = (0, 150, 150)
     vicinity_colour   : tuple[int, int, int] = (0, 150, 150)
     # --- Stress Rendering (render_mode="stress") ---
-    max_compression_render    : float = -50.0                       # kN/cm² — negative; full red at and beyond
-    max_tension_render        : float =  50.0                       # kN/cm² — positive; full blue at and beyond
+    max_compression_render    : float = -48.3                       # kN/cm² — negative; full red at and beyond
+    max_tension_render        : float =  62.1                       # kN/cm² — positive; full blue at and beyond
     stress_compression_colour : tuple[int, int, int] = (255, 0, 0)
     stress_tension_colour     : tuple[int, int, int] = (0, 0, 255)
     stress_outline_colour     : tuple[int, int, int] = (120, 120, 120)
     vicinity_width            : int = 2
-    stress_render_legend      : bool = False
+    stress_render_legend      : bool = True
     # ---   FEA  pre-flight   ---
     load_indices     : tuple = (0,3)
     load_divider     : int   = 5
@@ -126,19 +126,21 @@ class InternalVariables:
     pin_colour     : tuple[int, int, int] = (186, 130, 230)
     roller_colour  : tuple[int, int, int] = (98,  0,   150)
     # ---  FEA  Requirements  ---
-    allowable_deform                 : float = 3.00
+    allowable_deform                 : float = 1.75
     allowable_frame_tension          : float = 62.1
     allowable_frame_compression      : float = 48.3
-    allowable_connection_tension     : float = 1000.5 # 35.5
-    allowable_connection_compression : float = 1000.5 # 35.5
-    allowable_cable_compression      : float = 1000.0 # 0.0
-    allowable_cable_tension          : float = 1000.65 # 13.65
+    allowable_connection_tension     : float = 35.5 # 35.5
+    allowable_connection_compression : float = 35.5 # 35.5
+    allowable_cable_compression      : float = 0.0 # 0.0
+    allowable_cable_tension          : float = 13.65 # 13.65
     fea_check_tolerance : float = 1e-6
     # --- Extractor Behaviour ---
     fuse_mask_in_stock  : bool = True
     fuse_mask_in_areas  : bool = False
     fuse_areas_in_stock : bool = False
     CF_sentinel_skip    : bool = False
+    use_pointnet_encoders : bool = True
+    use_global_maxpool  : bool = False
     # ---  Extractor Layers   ---
     guide_curve_out    : int = 32
     stock_geometry_out : int = 64

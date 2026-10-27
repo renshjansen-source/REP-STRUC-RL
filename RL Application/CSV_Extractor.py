@@ -19,7 +19,7 @@ from tensorboard.backend.event_processing.event_accumulator import EventAccumula
 
 # Run log folder (or a single events.out.tfevents file) -> CSV name (without .csv)
 RUNS = {
-    "logs/20260930_065829": "entropy_baseline_with_rollout_ep_len",
+    "logs/20261014_151655": "default extractor",
 }
 
 TAGS = [

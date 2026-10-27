@@ -41,11 +41,20 @@ class RankedCandidate:
 # ORIENTATION ENUMERATION
 # =============================================================================
 
-def enumerate_orientations() -> list[tuple[PointDict, PointDict, bool]]:
-    # All 50 (target, candidate, mirror) combinations, fixed order so ranking
-    # and rank-index selection are reproducible across runs.
+def enumerate_orientations(allowed_points: Optional[set[PointDict]] = None) -> list[tuple[PointDict, PointDict, bool]]:
+    # All (target, candidate, mirror) combinations, fixed order so ranking
+    # and rank-index selection are reproducible across runs. When
+    # allowed_points is given, both target and candidate are restricted to
+    # that set — a combination is skipped entirely (not generated) if either
+    # role would use an excluded point. Defaults to all 5 points (full 50),
+    # so every existing call site is unaffected unless a restriction is given.
+    if allowed_points is None:
+        allowed_points = set(PointDict)
+
     orientations = []
     for target, candidate, mirror in product(PointDict, PointDict, (False, True)):
+        if target not in allowed_points or candidate not in allowed_points:
+            continue
         orientations.append((target, candidate, mirror))
     return orientations
 
@@ -88,13 +97,14 @@ def rank_candidates(
         distance_weight: float,
         initial_planes : Optional[list[Plane]] = None,
         previous_frame : Optional[BikeFrame] = None,
+        allowed_points : Optional[set[PointDict]] = None,
         ) -> list[RankedCandidate]:
     # Places all 50 orientations for the picked frame, computes step_reward for
     # each, keeps only genuine-progress candidates, and sorts descending by
     # total_reward. step_reward is reused wholesale (not split into a lighter
     # progress-only check) per the agreed approach.
 
-    orientations = enumerate_orientations()
+    orientations = enumerate_orientations(allowed_points)
     survivors: list[RankedCandidate] = []
 
     for orientation in orientations:
@@ -111,7 +121,7 @@ def rank_candidates(
             placed_frame, guide_curve, max_t, progress_weight, distance_weight
         )
 
-        if p_reward == IV.no_progress:
+        if p_reward == IV.no_progress and t > 0:
             continue
 
         survivors.append(RankedCandidate(
@@ -135,11 +145,12 @@ def resolve_placement(
         picked_orientation : int,
         rank_window        : int,
         placed_frames      : list[BikeFrame],
-        ) -> tuple[Optional[RankedCandidate], str, Optional[int]]:
+        wrap_orientation   : bool = True,
+        ) -> tuple[Optional[RankedCandidate], str, Optional[int], int]:
     '''
     Resolves the final placement from a progress-ranked candidate list.
 
-    Returns (chosen_candidate_or_None, outcome, used_rank):
+    Returns (chosen_candidate_or_None, outcome, used_rank, available options):
       outcome is one of "placed", "no_progress", "no_intersection".
       chosen_candidate is the full RankedCandidate (frame + orientation +
       reward fields), not just the placed frame, so the caller never needs to
@@ -161,7 +172,7 @@ def resolve_placement(
       - enough clean survivors                   -> direct index
     '''
     if len(ranked_candidates) == 0:
-        return None, "no_progress", None
+        return None, "no_progress", None, 0
 
     window = list(ranked_candidates[:rank_window])
     backfill_pool = list(ranked_candidates[rank_window:])  # rank 9, 10, ... in original order
@@ -185,11 +196,17 @@ def resolve_placement(
         idx += 1
 
     if len(clean) == 0:
-        return None, "no_intersection", None
+        return None, "no_intersection", None, 0
+    
+    if wrap_orientation:
+        used_rank = picked_orientation % len(clean)
+    else:
+        if picked_orientation < 0 or picked_orientation >= len(clean):
+            return None, "out_of_range", None, len(clean)
+        used_rank = picked_orientation
 
-    used_rank = picked_orientation % len(clean)
     chosen    = clean[used_rank]
-    return chosen, "placed", used_rank
+    return chosen, "placed", used_rank, len(clean)
 
 # =============================================================================
 # INPUT CONVERSION (pure — no Rhino types)

@@ -38,13 +38,13 @@ from PointNet_Extractor import PointNet_Extractor
 # =============================================================================
 # SETTINGS
 # =============================================================================
-MODEL_PATH    = "logs/20261008_232153_seeding_sweep/453908393_20261009_033910_best_model/best_model"   # <- update to the run you want to visualize
+MODEL_PATH    = "logs/20260930_065829/best_model/best_model"   # <- update to the run you want to visualize
 DETERMINISTIC = True
 BASE_SEED     = 0           # episode k is reset with seed BASE_SEED + k -> same episodes as Agent_FEA_Check
-GRID_COLUMNS  = 4
-GRID_ROWS     = 5
-MAX_EPISODES  = 1000        # give up after this many episodes; no image is saved if the grid isn't full
-IMAGE_NAME    = "grid_valid_4_5_seeded"
+GRID_COLUMNS  = 8
+GRID_ROWS     = 12
+MAX_EPISODES  = 3000        # give up after this many episodes; no image is saved if the grid isn't full
+IMAGE_NAME    = "grid_valid_agent_2_for_model_2"
 OUTPUT_PATH   = rf"C:\Users\rensh\Documents\Master Thesis\Report\Images and Charts\Reinforcement Learning\Results Data\Repo Export Grid Images\{IMAGE_NAME}.png"
 
 # =============================================================================
